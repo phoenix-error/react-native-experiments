@@ -61,7 +61,12 @@ export function DynamicIsland({
           >
             <View style={styles.grabber} />
             <View style={styles.sheetBody}>
-              <ParticleOrb state={state} size={104} speed={speed} />
+              {/* Render at the engine's tuned 64pt preset and scale the whole
+                  orb up — the presets are hand-tuned per size, so building at
+                  an untuned 104pt yields a sparse, near-invisible cloud. */}
+              <View style={styles.heroOrb}>
+                <ParticleOrb state={state} size={64} speed={speed} />
+              </View>
               <Text style={styles.sheetTitle}>{meta.label}</Text>
               <Text style={styles.sheetSub}>{SHEET_BODY}</Text>
             </View>
@@ -89,6 +94,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+    // hairline edge so the black surface still reads on a dark backdrop
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#2A2A31',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.4,
@@ -130,6 +138,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
+  },
+  heroOrb: {
+    width: 64,
+    height: 64,
+    transform: [{ scale: 1.55 }],
+    marginBottom: 14,
   },
   sheetTitle: {
     color: '#FFFFFF',

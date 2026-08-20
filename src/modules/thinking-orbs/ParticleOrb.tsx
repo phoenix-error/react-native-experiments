@@ -23,8 +23,11 @@ const LINE_STRIDE = 7;
 
 // The engine ships tuned presets only at size 64 and 20. Resolve at the
 // nearest tuned preset, then uniformly scale to the actual render size.
+// The 20-preset is far sparser (tuned for inline text), so anything up to
+// roughly half the 64-preset's size reads better — and much cheaper — with
+// it: a 38px icon on the 64-preset would allocate ~570 dots.
 function nearestPreset(size: number): OrbSize {
-  return size <= 34 ? 20 : 64;
+  return size < 52 ? 20 : 64;
 }
 
 export type ParticleOrbProps = {
@@ -60,8 +63,11 @@ export function ParticleOrb({
     [state, preset],
   );
   const build = MODE_FRAMES[mode];
-  const buildSize = preset;
-  const k = size / buildSize;
+  // Build the frame AT the real render size. The engine already lays a mode
+  // out for whatever size it's given (radii use a sub-linear `radiusScale`),
+  // so the preset only picks the tuned dot-count/speed — geometry must not be
+  // rescaled afterwards or the dots land outside the SVG viewport.
+  const buildSize = size;
 
   // Shared flat buffers the worklets read. Number[] is deep-copied into the
   // UI runtime on each assignment — cheap enough for a few hundred dots.
@@ -104,10 +110,14 @@ export function ParticleOrb({
         const w = Math.min(1, Math.max(0, d.white));
         const g = Math.round((dark ? 1 - w : w) * 255);
         const o = i * DOT_STRIDE;
-        db[o] = d.x * k;
-        db[o + 1] = d.y * k;
-        db[o + 2] = Math.max(0, d.r * k);
-        db[o + 3] = d.a ?? 1;
+        db[o] = d.x;
+        db[o + 1] = d.y;
+        db[o + 2] = Math.max(0, d.r);
+        // Fold the dot's grey level into alpha: the nodes are painted a flat
+        // white and only numeric props are animated, because react-native-svg
+        // on web does NOT apply animated *string* props (an animated `fill`
+        // silently keeps its initial value, rendering every dot black).
+        db[o + 3] = (d.a ?? 1) * (g / 255);
         db[o + 4] = g;
       }
       dotBuf.value = db;
@@ -121,12 +131,12 @@ export function ParticleOrb({
           const w = Math.min(1, Math.max(0, l.white));
           const g = Math.round((dark ? 1 - w : w) * 255);
           const o = i * LINE_STRIDE;
-          lb[o] = l.x1 * k;
-          lb[o + 1] = l.y1 * k;
-          lb[o + 2] = l.x2 * k;
-          lb[o + 3] = l.y2 * k;
-          lb[o + 4] = l.w * k;
-          lb[o + 5] = l.a ?? 1;
+          lb[o] = l.x1;
+          lb[o + 1] = l.y1;
+          lb[o + 2] = l.x2;
+          lb[o + 3] = l.y2;
+          lb[o + 4] = l.w;
+          lb[o + 5] = (l.a ?? 1) * (g / 255);
           lb[o + 6] = g;
         }
         lineBuf.value = lb;
@@ -139,7 +149,7 @@ export function ParticleOrb({
       running = false;
       cancelAnimationFrame(raf);
     };
-  }, [build, buildSize, opts, k, dark, dotPool, linePool, dotBuf, lineBuf]);
+  }, [build, buildSize, opts, dark, dotPool, linePool, dotBuf, lineBuf]);
 
   const dotIdx = useMemo(
     () => Array.from({ length: dotPool }, (_, i) => i),
@@ -150,57 +160,66 @@ export function ParticleOrb({
     [linePool],
   );
 
+  // Monochrome ink: dots are painted flat, their grey level carried in alpha.
+  const inkColor = dark ? '#FFFFFF' : '#000000';
+
   return (
     <View style={{ width: size, height: size }}>
       <Svg width={size} height={size}>
         {lineIdx.map((i) => (
-          <OrbLine key={`l${i}`} i={i} buf={lineBuf} />
+          <OrbLine key={`l${i}`} i={i} buf={lineBuf} color={inkColor} />
         ))}
         {dotIdx.map((i) => (
-          <OrbDot key={`d${i}`} i={i} buf={dotBuf} />
+          <OrbDot key={`d${i}`} i={i} buf={dotBuf} color={inkColor} />
         ))}
       </Svg>
     </View>
   );
 }
 
-function OrbDot({ i, buf }: { i: number; buf: SharedValue<number[]> }) {
+function OrbDot({
+  i,
+  buf,
+  color,
+}: {
+  i: number;
+  buf: SharedValue<number[]>;
+  color: string;
+}) {
   const animatedProps = useAnimatedProps(() => {
     'worklet';
     const b = buf.value;
     const o = i * DOT_STRIDE;
     if (o + DOT_STRIDE > b.length) {
-      return { cx: 0, cy: 0, r: 0, opacity: 0, fill: 'rgb(0,0,0)' };
+      return { cx: 0, cy: 0, r: 0, opacity: 0 };
     }
-    const g = b[o + 4];
     return {
       cx: b[o],
       cy: b[o + 1],
       r: b[o + 2],
       opacity: b[o + 3],
-      fill: `rgb(${g},${g},${g})`,
     };
   });
-  return <AnimatedCircle animatedProps={animatedProps} />;
+  // `fill` is a STATIC prop — animated string props don't apply on web.
+  return <AnimatedCircle fill={color} animatedProps={animatedProps} />;
 }
 
-function OrbLine({ i, buf }: { i: number; buf: SharedValue<number[]> }) {
+function OrbLine({
+  i,
+  buf,
+  color,
+}: {
+  i: number;
+  buf: SharedValue<number[]>;
+  color: string;
+}) {
   const animatedProps = useAnimatedProps(() => {
     'worklet';
     const b = buf.value;
     const o = i * LINE_STRIDE;
     if (o + LINE_STRIDE > b.length) {
-      return {
-        x1: 0,
-        y1: 0,
-        x2: 0,
-        y2: 0,
-        opacity: 0,
-        strokeWidth: 0,
-        stroke: 'rgb(0,0,0)',
-      };
+      return { x1: 0, y1: 0, x2: 0, y2: 0, opacity: 0, strokeWidth: 0 };
     }
-    const g = b[o + 6];
     return {
       x1: b[o],
       y1: b[o + 1],
@@ -208,8 +227,7 @@ function OrbLine({ i, buf }: { i: number; buf: SharedValue<number[]> }) {
       y2: b[o + 3],
       strokeWidth: b[o + 4],
       opacity: b[o + 5],
-      stroke: `rgb(${g},${g},${g})`,
     };
   });
-  return <AnimatedLine animatedProps={animatedProps} />;
+  return <AnimatedLine stroke={color} animatedProps={animatedProps} />;
 }
