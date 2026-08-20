@@ -1,19 +1,31 @@
 /**
- * Per-state visual config for the thinking orbs.
- * Inspired by Jakub Antalik's "Thinking Orbs" (orbs.jakubantalik.com).
+ * Per-state config for the thinking orbs.
+ * Faithful recreation of Jakub Antalik's "Thinking Orbs"
+ * (orbs.jakubantalik.com): monochrome white particles on black,
+ * each state a distinct *structured* form — not a random point cloud.
  */
+export type OrbStructure =
+  | 'globe' // dotted sphere built from latitude rings
+  | 'bands' // vertical meridian lines sweeping around
+  | 'constellation' // sparse drifting points
+  | 'orbital' // tilted dashed rings
+  | 'square'; // geometric outline (the "shaping" oddball)
+
 export type OrbState =
   | 'working'
   | 'searching'
   | 'solving'
   | 'listening'
+  | 'connecting'
+  | 'weaving'
   | 'composing'
+  | 'breathing'
   | 'shaping';
 
 export type OrbConfig = {
   label: string;
-  colors: [string, string]; // gradient stops for the particles
-  particleCount: number;
+  structure: OrbStructure;
+  density: number; // relative particle count (tuned per structure)
   spin: number; // base angular speed (rad/s)
   wobble: number; // radial breathing amount (0..1 of radius)
   jitter: number; // per-particle chaos
@@ -22,51 +34,75 @@ export type OrbConfig = {
 export const ORB_STATES: Record<OrbState, OrbConfig> = {
   working: {
     label: 'Working…',
-    colors: ['#7CE0FF', '#3D8BFF'],
-    particleCount: 26,
-    spin: 1.1,
-    wobble: 0.14,
-    jitter: 0.1,
+    structure: 'constellation',
+    density: 0.7,
+    spin: 0.35,
+    wobble: 0.18,
+    jitter: 0.28,
   },
   searching: {
     label: 'Searching…',
-    colors: ['#A98BFF', '#5B6BFF'],
-    particleCount: 22,
-    spin: 0.7,
-    wobble: 0.32,
-    jitter: 0.18,
+    structure: 'globe',
+    density: 1,
+    spin: 0.6,
+    wobble: 0.06,
+    jitter: 0.02,
   },
   solving: {
     label: 'Solving…',
-    colors: ['#FFE08A', '#FF9F45'],
-    particleCount: 30,
-    spin: 1.6,
-    wobble: 0.1,
-    jitter: 0.06,
+    structure: 'orbital',
+    density: 0.9,
+    spin: 1.5,
+    wobble: 0.05,
+    jitter: 0.03,
   },
   listening: {
     label: 'Agent listening…',
-    colors: ['#8BFFD1', '#31C48D'],
-    particleCount: 20,
-    spin: 0.5,
-    wobble: 0.4,
+    structure: 'globe',
+    density: 0.75,
+    spin: 0.4,
+    wobble: 0.28,
     jitter: 0.05,
+  },
+  connecting: {
+    label: 'Connecting…',
+    structure: 'bands',
+    density: 0.85,
+    spin: 0.7,
+    wobble: 0.08,
+    jitter: 0.04,
+  },
+  weaving: {
+    label: 'Agent weaving…',
+    structure: 'bands',
+    density: 1.1,
+    spin: 1,
+    wobble: 0.12,
+    jitter: 0.06,
   },
   composing: {
     label: 'Composing…',
-    colors: ['#FFA9D6', '#FF5DA2'],
-    particleCount: 24,
-    spin: 0.9,
-    wobble: 0.22,
-    jitter: 0.14,
+    structure: 'bands',
+    density: 0.9,
+    spin: 0.55,
+    wobble: 0.2,
+    jitter: 0.05,
+  },
+  breathing: {
+    label: 'Breathing…',
+    structure: 'globe',
+    density: 1,
+    spin: 0.3,
+    wobble: 0.42,
+    jitter: 0.03,
   },
   shaping: {
     label: 'Agent shaping…',
-    colors: ['#C4B5FD', '#8B5CF6'],
-    particleCount: 28,
-    spin: 1.2,
-    wobble: 0.26,
-    jitter: 0.22,
+    structure: 'square',
+    density: 1,
+    spin: 0.45,
+    wobble: 0.1,
+    jitter: 0.03,
   },
 };
 
@@ -75,6 +111,9 @@ export const ORB_ORDER: OrbState[] = [
   'searching',
   'solving',
   'listening',
+  'connecting',
+  'weaving',
   'composing',
+  'breathing',
   'shaping',
 ];

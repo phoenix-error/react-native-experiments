@@ -55,9 +55,6 @@ export function DynamicIsland({
           >
             <ParticleOrb state={state} size={orbSize} speed={speed} />
             <Text style={styles.expandedLabel}>{cfg.label}</Text>
-            <Text style={styles.expandedSub}>
-              Tap to collapse · {state}
-            </Text>
           </Animated.View>
         ) : (
           <Animated.View
@@ -115,10 +112,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
-  },
-  expandedSub: {
-    color: '#8E8E93',
-    fontSize: 13,
-    fontWeight: '500',
   },
 });
