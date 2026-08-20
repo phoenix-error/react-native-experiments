@@ -10,17 +10,16 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { DynamicIsland } from './DynamicIsland';
 import { ParticleOrb } from './ParticleOrb';
-import { ORB_ORDER, ORB_STATES, OrbState } from './orbStates';
+import { ORB_META, ORB_ORDER, OrbState } from './orbStates';
 
 const SPEEDS = [0.5, 1, 2];
 
 export function OrbIslandDemo() {
-  const [state, setState] = useState<OrbState>('working');
+  const [state, setState] = useState<OrbState>('composing');
   const [expanded, setExpanded] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [auto, setAuto] = useState(false);
 
-  // Optional auto-cycle through states to show them off.
   useEffect(() => {
     if (!auto) return;
     const id = setInterval(() => {
@@ -28,7 +27,7 @@ export function OrbIslandDemo() {
         const i = ORB_ORDER.indexOf(s);
         return ORB_ORDER[(i + 1) % ORB_ORDER.length];
       });
-    }, 2200);
+    }, 2400);
     return () => clearInterval(id);
   }, [auto]);
 
@@ -36,8 +35,10 @@ export function OrbIslandDemo() {
     <SafeAreaView style={styles.root}>
       <StatusBar style="light" />
 
-      {/* Faux phone top area with the island floating at the notch. */}
+      {/* Faux phone: the pill lives at the BOTTOM and springs UP into a
+          bottom sheet, exactly like Jakub's demo. */}
       <View style={styles.stage}>
+        <Text style={styles.hint}>tap the pill to open the sheet</Text>
         <View style={styles.islandSlot}>
           <DynamicIsland
             state={state}
@@ -46,7 +47,6 @@ export function OrbIslandDemo() {
             onPress={() => setExpanded((e) => !e)}
           />
         </View>
-        <Text style={styles.hint}>tap the island to expand / collapse</Text>
       </View>
 
       <ScrollView
@@ -61,14 +61,11 @@ export function OrbIslandDemo() {
               onPress={() => setState(s)}
               style={[styles.chip, state === s && styles.chipActive]}
             >
-              <ParticleOrb state={s} size={22} speed={speed} />
+              <ParticleOrb state={s} size={24} speed={speed} />
               <Text
-                style={[
-                  styles.chipText,
-                  state === s && styles.chipTextActive,
-                ]}
+                style={[styles.chipText, state === s && styles.chipTextActive]}
               >
-                {ORB_STATES[s].label.replace('…', '')}
+                {ORB_META[s].label.replace('…', '')}
               </Text>
             </Pressable>
           ))}
@@ -83,10 +80,7 @@ export function OrbIslandDemo() {
               style={[styles.pill, speed === sp && styles.pillActive]}
             >
               <Text
-                style={[
-                  styles.pillText,
-                  speed === sp && styles.pillTextActive,
-                ]}
+                style={[styles.pillText, speed === sp && styles.pillTextActive]}
               >
                 {sp}×
               </Text>
@@ -100,10 +94,8 @@ export function OrbIslandDemo() {
             onPress={() => setExpanded((e) => !e)}
             style={[styles.pill, expanded && styles.pillActive]}
           >
-            <Text
-              style={[styles.pillText, expanded && styles.pillTextActive]}
-            >
-              {expanded ? 'Expanded' : 'Compact'}
+            <Text style={[styles.pillText, expanded && styles.pillTextActive]}>
+              {expanded ? 'Sheet open' : 'Pill'}
             </Text>
           </Pressable>
           <Pressable
@@ -116,7 +108,6 @@ export function OrbIslandDemo() {
           </Pressable>
         </View>
 
-        {/* A big standalone orb so you can appreciate the particles. */}
         <Text style={styles.section}>Standalone</Text>
         <View style={styles.bigOrbWrap}>
           <ParticleOrb state={state} size={180} speed={speed} />
@@ -129,19 +120,21 @@ export function OrbIslandDemo() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0B0B0F' },
   stage: {
-    paddingTop: 24,
-    paddingBottom: 12,
+    paddingTop: 16,
+    paddingBottom: 14,
     alignItems: 'center',
   },
+  // Fixed-height slot; the pill is pinned to its BOTTOM so the sheet grows up.
   islandSlot: {
-    minHeight: 200,
-    justifyContent: 'flex-start',
+    height: 320,
+    width: '100%',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    marginTop: 6,
   },
   hint: {
     color: '#5A5A66',
     fontSize: 12,
-    marginTop: 8,
   },
   controls: { flex: 1 },
   controlsContent: { padding: 20, paddingBottom: 60 },

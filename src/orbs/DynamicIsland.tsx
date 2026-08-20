@@ -8,12 +8,14 @@ import Animated, {
   FadeOut,
 } from 'react-native-reanimated';
 import { ParticleOrb } from './ParticleOrb';
-import { ORB_STATES, OrbState } from './orbStates';
+import { ORB_META, SHEET_BODY, OrbState } from './orbStates';
 
-const SPRING = { damping: 16, stiffness: 180, mass: 0.9 };
+// A finger-driven spring (velocity-carrying settle, gentle overshoot).
+const SPRING = { damping: 18, stiffness: 190, mass: 0.9 };
 
-const COMPACT = { width: 172, height: 44, radius: 22 };
-const EXPANDED = { width: 340, height: 190, radius: 40 };
+// Compact pill (bottom-anchored) <-> expanded bottom sheet.
+const COMPACT = { width: 190, height: 46, radius: 23 };
+const SHEET = { width: 320, height: 300, radius: 40 };
 
 export type DynamicIslandProps = {
   state: OrbState;
@@ -22,49 +24,57 @@ export type DynamicIslandProps = {
   onPress?: () => void;
 };
 
+/**
+ * Bottom-anchored "Dynamic Island" pill that springs UP into a bottom
+ * sheet — matching Jakub Antalik's demo: a compact pill at the bottom of
+ * the screen taps open into a rounded card with a big orb, a title, and a
+ * line of body copy.
+ */
 export function DynamicIsland({
   state,
   expanded,
   speed = 1,
   onPress,
 }: DynamicIslandProps) {
-  const cfg = ORB_STATES[state];
-  const progress = useDerivedValue(() =>
-    withSpring(expanded ? 1 : 0, SPRING),
-  );
+  const meta = ORB_META[state];
+  const progress = useDerivedValue(() => withSpring(expanded ? 1 : 0, SPRING));
 
+  // Grows upward: bottom edge stays put, top edge rises. We animate width /
+  // height / radius; the container is bottom-aligned in its slot.
   const containerStyle = useAnimatedStyle(() => {
     const p = progress.value;
     return {
-      width: COMPACT.width + (EXPANDED.width - COMPACT.width) * p,
-      height: COMPACT.height + (EXPANDED.height - COMPACT.height) * p,
-      borderRadius: COMPACT.radius + (EXPANDED.radius - COMPACT.radius) * p,
+      width: COMPACT.width + (SHEET.width - COMPACT.width) * p,
+      height: COMPACT.height + (SHEET.height - COMPACT.height) * p,
+      borderRadius: COMPACT.radius + (SHEET.radius - COMPACT.radius) * p,
     };
   });
-
-  const orbSize = expanded ? 96 : 28;
 
   return (
     <Pressable onPress={onPress}>
       <Animated.View style={[styles.island, containerStyle]}>
         {expanded ? (
           <Animated.View
-            style={styles.expanded}
-            entering={FadeIn.duration(220).delay(60)}
-            exiting={FadeOut.duration(120)}
+            style={styles.sheet}
+            entering={FadeIn.duration(220).delay(70)}
+            exiting={FadeOut.duration(110)}
           >
-            <ParticleOrb state={state} size={orbSize} speed={speed} />
-            <Text style={styles.expandedLabel}>{cfg.label}</Text>
+            <View style={styles.grabber} />
+            <View style={styles.sheetBody}>
+              <ParticleOrb state={state} size={104} speed={speed} />
+              <Text style={styles.sheetTitle}>{meta.label}</Text>
+              <Text style={styles.sheetSub}>{SHEET_BODY}</Text>
+            </View>
           </Animated.View>
         ) : (
           <Animated.View
             style={styles.compact}
-            entering={FadeIn.duration(160)}
-            exiting={FadeOut.duration(80)}
+            entering={FadeIn.duration(150)}
+            exiting={FadeOut.duration(70)}
           >
-            <ParticleOrb state={state} size={orbSize} speed={speed} />
+            <ParticleOrb state={state} size={30} speed={speed} />
             <Text style={styles.compactLabel} numberOfLines={1}>
-              {cfg.label}
+              {meta.label}
             </Text>
           </Animated.View>
         )}
@@ -79,38 +89,60 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    // Subtle floating shadow so the pill reads off the wallpaper.
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 14,
   },
   compact: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    gap: 8,
+    paddingLeft: 12,
+    paddingRight: 16,
+    gap: 10,
     width: '100%',
     height: '100%',
     justifyContent: 'flex-start',
   },
   compactLabel: {
     color: '#F2F2F2',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     flexShrink: 1,
   },
-  expanded: {
+  sheet: {
     flex: 1,
     width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    paddingTop: 12,
+    paddingHorizontal: 24,
   },
-  expandedLabel: {
+  grabber: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#3A3A3C',
+    marginBottom: 10,
+  },
+  sheetBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  sheetTitle: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
+    marginTop: 4,
+  } as any,
+  sheetSub: {
+    color: '#8E8E93',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 6,
   },
 });

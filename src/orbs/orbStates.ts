@@ -1,110 +1,34 @@
-/**
- * Per-state config for the thinking orbs.
- * Faithful recreation of Jakub Antalik's "Thinking Orbs"
- * (orbs.jakubantalik.com): monochrome white particles on black,
- * each state a distinct *structured* form — not a random point cloud.
- */
-export type OrbStructure =
-  | 'globe' // dotted sphere built from latitude rings
-  | 'bands' // vertical meridian lines sweeping around
-  | 'constellation' // sparse drifting points
-  | 'orbital' // tilted dashed rings
-  | 'square'; // geometric outline (the "shaping" oddball)
+// Labels + ordering for the nine orb states. State semantics and the
+// particle geometry now live in the vendored engine (./engine); this file
+// is just the presentation layer (display strings, sheet body copy, order).
 
-export type OrbState =
-  | 'working'
-  | 'searching'
-  | 'solving'
-  | 'listening'
-  | 'connecting'
-  | 'weaving'
-  | 'composing'
-  | 'breathing'
-  | 'shaping';
+import type { OrbState } from './engine';
 
-export type OrbConfig = {
+export type { OrbState } from './engine';
+
+export type OrbMeta = {
+  /** Compact-pill / sheet title, e.g. "Composing…". */
   label: string;
-  structure: OrbStructure;
-  density: number; // relative particle count (tuned per structure)
-  spin: number; // base angular speed (rad/s)
-  wobble: number; // radial breathing amount (0..1 of radius)
-  jitter: number; // per-particle chaos
+  /** One-word engine mode description, for the chip caption. */
+  hint: string;
 };
 
-export const ORB_STATES: Record<OrbState, OrbConfig> = {
-  working: {
-    label: 'Working…',
-    structure: 'constellation',
-    density: 0.7,
-    spin: 0.35,
-    wobble: 0.18,
-    jitter: 0.28,
-  },
-  searching: {
-    label: 'Searching…',
-    structure: 'globe',
-    density: 1,
-    spin: 0.6,
-    wobble: 0.06,
-    jitter: 0.02,
-  },
-  solving: {
-    label: 'Solving…',
-    structure: 'orbital',
-    density: 0.9,
-    spin: 1.5,
-    wobble: 0.05,
-    jitter: 0.03,
-  },
-  listening: {
-    label: 'Agent listening…',
-    structure: 'globe',
-    density: 0.75,
-    spin: 0.4,
-    wobble: 0.28,
-    jitter: 0.05,
-  },
-  connecting: {
-    label: 'Connecting…',
-    structure: 'bands',
-    density: 0.85,
-    spin: 0.7,
-    wobble: 0.08,
-    jitter: 0.04,
-  },
-  weaving: {
-    label: 'Agent weaving…',
-    structure: 'bands',
-    density: 1.1,
-    spin: 1,
-    wobble: 0.12,
-    jitter: 0.06,
-  },
-  composing: {
-    label: 'Composing…',
-    structure: 'bands',
-    density: 0.9,
-    spin: 0.55,
-    wobble: 0.2,
-    jitter: 0.05,
-  },
-  breathing: {
-    label: 'Breathing…',
-    structure: 'globe',
-    density: 1,
-    spin: 0.3,
-    wobble: 0.42,
-    jitter: 0.03,
-  },
-  shaping: {
-    label: 'Agent shaping…',
-    structure: 'square',
-    density: 1,
-    spin: 0.45,
-    wobble: 0.1,
-    jitter: 0.03,
-  },
+// Labels mirror the upstream component (LABELS map in the RN port), with the
+// two "Agent …" phrasings shown in Jakub's demo video preserved.
+export const ORB_META: Record<OrbState, OrbMeta> = {
+  working: { label: 'Working…', hint: 'orbits' },
+  searching: { label: 'Searching…', hint: 'globe scan' },
+  solving: { label: 'Solving…', hint: 'rubik bands' },
+  listening: { label: 'Agent listening…', hint: 'waveform' },
+  connecting: { label: 'Connecting…', hint: 'web' },
+  weaving: { label: 'Agent weaving…', hint: 'braid' },
+  composing: { label: 'Composing…', hint: 'ribbon' },
+  breathing: { label: 'Thinking…', hint: 'ring' },
+  shaping: { label: 'Agent shaping…', hint: 'morph' },
 };
+
+/** Body copy shown in the expanded bottom sheet (from the demo video). */
+export const SHEET_BODY = 'Agent is processing your request. Please wait, it might take a few seconds.';
 
 export const ORB_ORDER: OrbState[] = [
   'working',
