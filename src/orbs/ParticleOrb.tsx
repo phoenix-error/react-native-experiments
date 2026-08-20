@@ -19,9 +19,9 @@ import { ORB_STATES, OrbState } from './orbStates';
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type Particle = {
-  baseAngle: number; // starting angle around the orb
-  radiusFactor: number; // 0..1 distance from centre
-  tilt: number; // orbital plane tilt -> fake 3D
+  theta: number; // azimuth around the vertical axis (0..2π)
+  phi: number; // polar angle from the top (0..π)
+  radiusFactor: number; // 0..1 distance from centre (some sit inside)
   speedMul: number; // relative angular speed
   phase: number; // jitter phase offset
   sizeMul: number; // relative particle size
@@ -35,10 +35,12 @@ function makeParticles(count: number, seed: number): Particle[] {
     return s / 233280;
   };
   return Array.from({ length: count }, () => ({
-    baseAngle: rnd() * Math.PI * 2,
-    radiusFactor: 0.35 + rnd() * 0.65,
-    tilt: (rnd() - 0.5) * 1.4,
-    speedMul: 0.7 + rnd() * 0.9,
+    theta: rnd() * Math.PI * 2,
+    // acos(1-2u) distributes phi uniformly over the sphere surface
+    // (no clumping at the poles). Bias slightly toward a shell.
+    phi: Math.acos(1 - 2 * rnd()),
+    radiusFactor: 0.55 + rnd() * 0.45,
+    speedMul: 0.75 + rnd() * 0.7,
     phase: rnd() * Math.PI * 2,
     sizeMul: 0.6 + rnd() * 0.8,
   }));
@@ -70,18 +72,21 @@ function OrbParticle({
   const animatedProps = useAnimatedProps(() => {
     'worklet';
     const t = clock.value;
-    const angle = p.baseAngle + t * spin * p.speedMul;
     // Breathing radius + a little per-particle chaos.
     const breathe = 1 + Math.sin(t * 1.3 + p.phase) * wobble;
     const chaos = 1 + Math.sin(t * 2.7 * p.speedMul + p.phase) * jitter;
-    const r = radius * p.radiusFactor * breathe * chaos;
+    const R = radius * p.radiusFactor * breathe * chaos;
 
-    // Project onto a tilted circle -> depth = z gives size/opacity.
-    const x = cx + Math.cos(angle) * r;
-    const depth = Math.sin(angle) * Math.cos(p.tilt); // -1 (back) .. 1 (front)
-    const y = cy + Math.sin(angle) * r * Math.sin(p.tilt) * 0.6;
+    // Point on a sphere, rotating around the vertical (Y) axis over time.
+    const a = p.theta + t * spin * p.speedMul; // azimuth spins
+    const sinPhi = Math.sin(p.phi);
+    const cosPhi = Math.cos(p.phi);
 
-    const depthNorm = (depth + 1) / 2; // 0..1
+    const x = cx + R * sinPhi * Math.cos(a);
+    const y = cy + R * cosPhi; // full vertical spread -> round sphere
+    const z = sinPhi * Math.sin(a); // -1 (back) .. 1 (front)
+
+    const depthNorm = (z + 1) / 2; // 0..1
     const pr = (1.4 + depthNorm * 3.2) * p.sizeMul;
     const opacity = 0.25 + depthNorm * 0.75;
 
