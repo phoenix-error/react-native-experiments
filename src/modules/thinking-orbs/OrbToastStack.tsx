@@ -89,7 +89,7 @@ export function OrbToastStack({
       ) : null}
 
       <View
-        style={[styles.dock, { paddingBottom: insets.bottom + 14 }]}
+        style={[styles.dock, { paddingBottom: insets.bottom + 22 }]}
         pointerEvents="box-none"
       >
         {/* Toasts peeking out behind the front one */}
@@ -107,7 +107,7 @@ export function OrbToastStack({
                   width: screenW - SIDE * 2,
                   height: TOAST_H,
                   borderRadius: TOAST_R,
-                  bottom: insets.bottom + 14,
+                  bottom: insets.bottom + 22,
                   transform: [
                     { translateY: -(i + 1) * 9 },
                     { scale: 1 - (i + 1) * 0.05 },
@@ -164,17 +164,21 @@ function MorphingSurface({
     };
   });
 
-  // Orb: one canvas, only translated + scaled. Toast = left-aligned small,
-  // sheet = centred large.
+  // Orb: one canvas, only translated + scaled. The canvas is ORB_BASE wide but
+  // drawn scaled, so positions are computed from the SCALED size — otherwise a
+  // 64pt box drawn at 0.47 still reserves 64pt of layout and the label collides.
   const orbStyle = useAnimatedStyle(() => {
     const p = progress.value;
+    const scale = interpolate(p, [0, 1], [ORB_TOAST_SCALE, ORB_SHEET_SCALE]);
+    const drawn = ORB_BASE * scale;
+    // toast: left-aligned; sheet: centred
+    const cx = interpolate(p, [0, 1], [14 + drawn / 2, (screenW - SIDE) / 2]);
+    const cy = interpolate(p, [0, 1], [TOAST_H / 2, 118]);
     return {
       position: 'absolute',
-      left: interpolate(p, [0, 1], [14, (screenW - SIDE) / 2 - ORB_BASE / 2]),
-      top: interpolate(p, [0, 1], [TOAST_H / 2 - ORB_BASE / 2, 52]),
-      transform: [
-        { scale: interpolate(p, [0, 1], [ORB_TOAST_SCALE, ORB_SHEET_SCALE]) },
-      ],
+      left: cx - ORB_BASE / 2,
+      top: cy - ORB_BASE / 2,
+      transform: [{ scale }],
     };
   });
 
@@ -247,10 +251,10 @@ const styles = StyleSheet.create({
   },
   toastTextWrap: {
     position: 'absolute',
-    left: 52,
+    left: 60,
     right: 16,
     top: 0,
-    bottom: 0,
+    height: TOAST_H,
     justifyContent: 'center',
   },
   toastLabel: { color: '#F2F2F5', fontSize: 15, fontWeight: '600' },
@@ -258,7 +262,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 24,
     right: 24,
-    top: 172,
+    top: 186,
     alignItems: 'center',
   },
   sheetTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
