@@ -107,11 +107,12 @@ export function OrbToastStack({
         pointerEvents="box-none"
       >
         {/* The stack is anchored to the FRONT pill, not to the dock: absolute
-            children are laid out against the parent's padding box, so mixing
-            the dock's paddingBottom with a `bottom` offset here counted the
-            dock gap twice and threw the older rows above the front pill.
-            The wrapper below is sized by the front pill, so the older rows can
-            simply step down from its top edge. */}
+            children lay out against their parent's PADDING box, so mixing the
+            dock's paddingBottom with a `bottom` offset counted the dock gap
+            twice and threw the older rows above the front pill.
+            This wrapper auto-sizes to the front pill; older rows hang BELOW it
+            with a negative offset, so no fixed height is needed and the sheet
+            can still grow freely. */}
         <View style={styles.stackAnchor} pointerEvents="box-none">
           {!isOpen &&
             behind
@@ -123,15 +124,15 @@ export function OrbToastStack({
                   entering={FadeIn.duration(160)}
                   exiting={FadeOut.duration(110)}
                   pointerEvents="none"
-                  style={[
-                    styles.stacked,
-                    {
-                      // step DOWN per row, so each older pill shows a sliver
-                      top: (i + 1) * PEEK_Y,
-                      transform: [{ scale: 1 - (i + 1) * PEEK_SCALE }],
-                      zIndex: -(i + 1),
-                    },
-                  ]}
+                    style={[
+                      styles.stacked,
+                      {
+                        // hang BELOW the front pill, each row a little lower
+                        bottom: -(i + 1) * PEEK_Y,
+                        transform: [{ scale: 1 - (i + 1) * PEEK_SCALE }],
+                        zIndex: -(i + 1),
+                      },
+                    ]}
                 >
                   <Pill state={t.state} depth={i + 1} />
                 </Animated.View>
@@ -303,8 +304,8 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   front: { zIndex: 3 },
-  /** Sized by the front pill; older rows position themselves against it. */
-  stackAnchor: { alignItems: 'center', justifyContent: 'flex-end' },
+  /** Base: sizing is applied inline, and only while collapsed. */
+  stackAnchor: { alignItems: 'center' },
   stacked: { position: 'absolute' },
   pillBox: {
     width: PILL.width,
