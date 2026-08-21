@@ -49,8 +49,6 @@ const SIDE = 14;
 
 /** Orb is drawn at this size and only ever scaled. */
 const ORB_BASE = 64;
-const ORB_TOAST_SCALE = 30 / ORB_BASE;
-const ORB_SHEET_SCALE = 104 / ORB_BASE;
 
 export type OrbToast = {
   id: string;
@@ -164,20 +162,36 @@ function MorphingSurface({
     };
   });
 
-  // Orb: one canvas, only translated + scaled. The canvas is ORB_BASE wide but
-  // drawn scaled, so positions are computed from the SCALED size — otherwise a
-  // 64pt box drawn at 0.47 still reserves 64pt of layout and the label collides.
-  const orbStyle = useAnimatedStyle(() => {
+  // Orb: ONE canvas at the engine's tuned preset, only moved and scaled.
+  //
+  // `transform: scale` scales around the view's CENTRE, not its origin, so the
+  // wrapper is sized to the DRAWN diameter and the oversized canvas is centred
+  // inside it with negative margins. That keeps the visual box equal to the
+  // layout box — anchoring by the unscaled 64pt box is what pushed the orb into
+  // the label before.
+  const orbWrap = useAnimatedStyle(() => {
     const p = progress.value;
-    const scale = interpolate(p, [0, 1], [ORB_TOAST_SCALE, ORB_SHEET_SCALE]);
-    const drawn = ORB_BASE * scale;
-    // toast: left-aligned; sheet: centred
+    const drawn = interpolate(p, [0, 1], [30, 104]);
     const cx = interpolate(p, [0, 1], [14 + drawn / 2, (screenW - SIDE) / 2]);
     const cy = interpolate(p, [0, 1], [TOAST_H / 2, 118]);
     return {
       position: 'absolute',
-      left: cx - ORB_BASE / 2,
-      top: cy - ORB_BASE / 2,
+      left: cx - drawn / 2,
+      top: cy - drawn / 2,
+      width: drawn,
+      height: drawn,
+    };
+  });
+
+  const orbInner = useAnimatedStyle(() => {
+    const p = progress.value;
+    const drawn = interpolate(p, [0, 1], [30, 104]);
+    const scale = drawn / ORB_BASE;
+    const inset = -(ORB_BASE - drawn) / 2;
+    return {
+      position: 'absolute',
+      left: inset,
+      top: inset,
       transform: [{ scale }],
     };
   });
@@ -197,8 +211,10 @@ function MorphingSurface({
       <Animated.View style={[styles.surface, styles.front, surface]}>
         <Animated.View style={[styles.grabber, grabber]} pointerEvents="none" />
 
-        <Animated.View style={orbStyle} pointerEvents="none">
-          <ParticleOrb state={toast.state} size={ORB_BASE} />
+        <Animated.View style={orbWrap} pointerEvents="none">
+          <Animated.View style={orbInner}>
+            <ParticleOrb state={toast.state} size={ORB_BASE} />
+          </Animated.View>
         </Animated.View>
 
         {/* compact label, sits to the right of the small orb */}
