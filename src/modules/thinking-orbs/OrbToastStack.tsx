@@ -85,8 +85,10 @@ export function OrbToastStack({
         style={[styles.dock, { paddingBottom: insets.bottom + 20 }]}
         pointerEvents="box-none"
       >
-        {/* Behind: real toasts, shrunk and nudged up. Reversed so the
-            furthest row paints first. */}
+        {/* Behind: real pills, shrunk and nudged up. Reversed so the furthest
+            row paints first. They keep full opacity — the shrink and the
+            offset already read as depth, and dimming a near-black pill on a
+            near-black page makes it disappear entirely. */}
         {!isOpen &&
           behind
             .map((t, i) => ({ t, i }))
@@ -105,11 +107,10 @@ export function OrbToastStack({
                       { translateY: -(i + 1) * PEEK_Y },
                       { scale: 1 - (i + 1) * PEEK_SCALE },
                     ],
-                    opacity: 1 - (i + 1) * 0.25,
                   },
                 ]}
               >
-                <Pill state={t.state} />
+                <Pill state={t.state} depth={i + 1} />
               </Animated.View>
             ))}
 
@@ -123,10 +124,23 @@ export function OrbToastStack({
   );
 }
 
-/** A plain, non-animated pill — used for the rows sitting behind the front. */
-function Pill({ state }: { state: OrbState }) {
+/**
+ * A plain, non-animated pill — used for the rows sitting behind the front one.
+ * Deeper rows get a slightly lighter surface and a brighter border so they
+ * separate from the page instead of melting into it.
+ */
+function Pill({ state, depth = 0 }: { state: OrbState; depth?: number }) {
   return (
-    <View style={[styles.surface, styles.pillBox]}>
+    <View
+      style={[
+        styles.surface,
+        styles.pillBox,
+        {
+          backgroundColor: depth === 0 ? '#000' : depth === 1 ? '#131317' : '#1A1A20',
+          borderColor: depth === 0 ? '#2A2A31' : '#33333C',
+        },
+      ]}
+    >
       <View style={styles.pillRow}>
         <ParticleOrb state={state} size={ORB_PILL} />
         <Text style={styles.pillLabel} numberOfLines={1}>
