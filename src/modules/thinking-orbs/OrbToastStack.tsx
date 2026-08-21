@@ -1,4 +1,10 @@
-import { StyleSheet, Pressable, Text, View } from 'react-native';
+import {
+  StyleSheet,
+  Pressable,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -34,9 +40,13 @@ import type { OrbState } from './engine';
 const SPRING = { damping: 20, stiffness: 260, mass: 0.8 } as const;
 const FADE = { duration: 110, easing: Easing.out(Easing.quad) } as const;
 
-// Original pill / sheet geometry.
+// Pill geometry. The sheet's width/height are derived at runtime: a real
+// bottom sheet spans the full screen width and sits flush against the bottom
+// edge, so it depends on the window and the safe-area inset.
 const PILL = { width: 190, height: 46, radius: 23 };
-const SHEET = { width: 320, height: 300, radius: 40 };
+const SHEET = { contentHeight: 330, radius: 38 };
+/** Gap between the docked pill and the bottom edge. */
+const DOCK_GAP = 20;
 
 const ORB_BASE = 64; // the engine's tuned preset — never changed at runtime
 const ORB_PILL = 30;
@@ -67,6 +77,7 @@ export function OrbToastStack({
   onCollapse,
 }: OrbToastStackProps) {
   const insets = useSafeAreaInsets();
+  const { width: screenW } = useWindowDimensions();
 
   const front = toasts[0];
   if (!front) return null;
@@ -87,7 +98,7 @@ export function OrbToastStack({
       ) : null}
 
       <View
-        style={[styles.dock, { paddingBottom: insets.bottom + 20 }]}
+        style={[styles.dock, { paddingBottom: insets.bottom + DOCK_GAP }]}
         pointerEvents="box-none"
       >
         {/* Behind: real pills, shrunk and nudged up. Reversed so the furthest
@@ -107,7 +118,7 @@ export function OrbToastStack({
                 style={[
                   styles.stacked,
                   {
-                    bottom: insets.bottom + 20,
+                    bottom: insets.bottom + DOCK_GAP,
                     transform: [
                       { translateY: -(i + 1) * PEEK_Y },
                       { scale: 1 - (i + 1) * PEEK_SCALE },
@@ -122,6 +133,8 @@ export function OrbToastStack({
         <MorphingSurface
           toast={front}
           open={isOpen}
+          screenW={screenW}
+          bottomInset={insets.bottom}
           onPress={() => (isOpen ? onCollapse() : onExpand(front.id))}
         />
       </View>
@@ -160,20 +173,37 @@ function MorphingSurface({
   toast,
   open,
   onPress,
+  screenW,
+  bottomInset,
 }: {
   toast: OrbToast;
   open: boolean;
   onPress: () => void;
+  screenW: number;
+  bottomInset: number;
 }) {
   const meta = ORB_META[toast.state];
   const progress = useDerivedValue(() => withSpring(open ? 1 : 0, SPRING));
 
+  // A real bottom sheet is full-bleed and flush with the bottom edge, so the
+  // sheet's height swallows the safe-area inset and renders its content above
+  // it. The pill, by contrast, floats with a gap — so the dock gap animates
+  // away as the pill grows.
+  const sheetW = screenW;
+  const sheetH = SHEET.contentHeight + bottomInset;
+
   const surface = useAnimatedStyle(() => {
     const p = progress.value;
     return {
-      width: interpolate(p, [0, 1], [PILL.width, SHEET.width]),
-      height: interpolate(p, [0, 1], [PILL.height, SHEET.height]),
-      borderRadius: interpolate(p, [0, 1], [PILL.radius, SHEET.radius]),
+      width: interpolate(p, [0, 1], [PILL.width, sheetW]),
+      height: interpolate(p, [0, 1], [PILL.height, sheetH]),
+      borderTopLeftRadius: interpolate(p, [0, 1], [PILL.radius, SHEET.radius]),
+      borderTopRightRadius: interpolate(p, [0, 1], [PILL.radius, SHEET.radius]),
+      // bottom corners flatten out as it docks against the screen edge
+      borderBottomLeftRadius: interpolate(p, [0, 1], [PILL.radius, 0]),
+      borderBottomRightRadius: interpolate(p, [0, 1], [PILL.radius, 0]),
+      // close the floating gap so the sheet ends flush with the bottom
+      marginBottom: interpolate(p, [0, 1], [0, -(bottomInset + DOCK_GAP)]),
     };
   });
 
@@ -183,11 +213,11 @@ function MorphingSurface({
   const orbWrap = useAnimatedStyle(() => {
     const p = progress.value;
     const drawn = interpolate(p, [0, 1], [ORB_PILL, ORB_SHEET]);
-    const w = interpolate(p, [0, 1], [PILL.width, SHEET.width]);
-    const h = interpolate(p, [0, 1], [PILL.height, SHEET.height]);
+    const w = interpolate(p, [0, 1], [PILL.width, sheetW]);
+    const h = interpolate(p, [0, 1], [PILL.height, sheetH]);
     // pill: left-aligned, vertically centred. sheet: horizontally centred, high.
     const cx = interpolate(p, [0, 1], [12 + drawn / 2, w / 2]);
-    const cy = interpolate(p, [0, 1], [h / 2, 108]);
+    const cy = interpolate(p, [0, 1], [h / 2, 112]);
     return {
       position: 'absolute',
       left: cx - drawn / 2,
@@ -309,7 +339,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 24,
     right: 24,
-    top: 178,
+    top: 190,
     alignItems: 'center',
   },
   sheetTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },
