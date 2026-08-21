@@ -60,10 +60,11 @@ const ORB_SHEET = 128; // hero orb in the sheet, per the reference
  * Stacking, following sonner: the newest pill sits in front, older ones peek
  * out BELOW it, each shifted down and scaled slightly smaller.
  *
- * PEEK_Y must clearly exceed the pill's corner radius — a smaller offset
- * leaves the rows behind hidden and the stack reads as one smudged blob.
+ * PEEK_Y must clearly exceed the pill's corner radius (22) — below that the
+ * rows behind hide inside the front pill's rounded ends and the stack reads as
+ * one smudged blob.
  */
-const PEEK_Y = 14;
+const PEEK_Y = 30;
 const PEEK_SCALE = 0.07;
 
 export type OrbToast = { id: string; state: OrbState };
