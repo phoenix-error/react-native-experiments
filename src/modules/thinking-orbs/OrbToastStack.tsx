@@ -106,42 +106,46 @@ export function OrbToastStack({
         style={[styles.dock, { paddingBottom: insets.bottom + DOCK_GAP }]}
         pointerEvents="box-none"
       >
-        {/* Older pills peek out BELOW the newest one (sonner's stacking):
-            each row sits lower and slightly smaller. Painted furthest-first so
-            the nearest row ends up on top. They keep full opacity — dimming a
-            near-black pill on a near-black page erases it. */}
-        {!isOpen &&
-          behind
-            .map((t, i) => ({ t, i }))
-            .reverse()
-            .map(({ t, i }) => (
-              <Animated.View
-                key={t.id}
-                entering={FadeIn.duration(160)}
-                exiting={FadeOut.duration(110)}
-                pointerEvents="none"
-                style={[
-                  styles.stacked,
-                  {
-                    // step DOWN per row, so each older pill shows a sliver
-                    bottom: insets.bottom + DOCK_GAP - (i + 1) * PEEK_Y,
-                    transform: [{ scale: 1 - (i + 1) * PEEK_SCALE }],
-                    zIndex: 2 - i,
-                  },
-                ]}
-              >
-                <Pill state={t.state} depth={i + 1} />
-              </Animated.View>
-            ))}
+        {/* The stack is anchored to the FRONT pill, not to the dock: absolute
+            children are laid out against the parent's padding box, so mixing
+            the dock's paddingBottom with a `bottom` offset here counted the
+            dock gap twice and threw the older rows above the front pill.
+            The wrapper below is sized by the front pill, so the older rows can
+            simply step down from its top edge. */}
+        <View style={styles.stackAnchor} pointerEvents="box-none">
+          {!isOpen &&
+            behind
+              .map((t, i) => ({ t, i }))
+              .reverse()
+              .map(({ t, i }) => (
+                <Animated.View
+                  key={t.id}
+                  entering={FadeIn.duration(160)}
+                  exiting={FadeOut.duration(110)}
+                  pointerEvents="none"
+                  style={[
+                    styles.stacked,
+                    {
+                      // step DOWN per row, so each older pill shows a sliver
+                      top: (i + 1) * PEEK_Y,
+                      transform: [{ scale: 1 - (i + 1) * PEEK_SCALE }],
+                      zIndex: -(i + 1),
+                    },
+                  ]}
+                >
+                  <Pill state={t.state} depth={i + 1} />
+                </Animated.View>
+              ))}
 
-        <MorphingSurface
-          toast={front}
-          open={isOpen}
-          screenW={screenW}
-          screenH={screenH}
-          bottomInset={insets.bottom}
-          onPress={() => (isOpen ? onCollapse() : onExpand(front.id))}
-        />
+          <MorphingSurface
+            toast={front}
+            open={isOpen}
+            screenW={screenW}
+            screenH={screenH}
+            bottomInset={insets.bottom}
+            onPress={() => (isOpen ? onCollapse() : onExpand(front.id))}
+          />
+        </View>
       </View>
     </View>
   );
@@ -299,7 +303,9 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   front: { zIndex: 3 },
-  stacked: { position: 'absolute', zIndex: 1 },
+  /** Sized by the front pill; older rows position themselves against it. */
+  stackAnchor: { alignItems: 'center', justifyContent: 'flex-end' },
+  stacked: { position: 'absolute' },
   pillBox: {
     width: PILL.width,
     height: PILL.height,
