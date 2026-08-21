@@ -40,17 +40,21 @@ import type { OrbState } from './engine';
 const SPRING = { damping: 20, stiffness: 260, mass: 0.8 } as const;
 const FADE = { duration: 110, easing: Easing.out(Easing.quad) } as const;
 
-// Pill geometry. The sheet's width/height are derived at runtime: a real
-// bottom sheet spans the full screen width and sits flush against the bottom
-// edge, so it depends on the window and the safe-area inset.
-const PILL = { width: 190, height: 46, radius: 23 };
-const SHEET = { contentHeight: 330, radius: 38 };
+// Geometry measured off the reference video (frame-by-frame, see README):
+//
+// PILL  — compact, only as wide as its content (~45% of the screen), floating
+//         above the bottom edge. The orb nearly fills it vertically.
+// SHEET — a FLOATING CARD, not an edge-to-edge bottom sheet: a visible margin
+//         on both sides, a clear gap below it, and all four corners rounded.
+//         It fills most of the screen. No grabber.
+const PILL = { width: 168, height: 44, radius: 22 };
+const SHEET = { radius: 34, sideMargin: 22, bottomGap: 26 };
 /** Gap between the docked pill and the bottom edge. */
-const DOCK_GAP = 20;
+const DOCK_GAP = 46;
 
 const ORB_BASE = 64; // the engine's tuned preset — never changed at runtime
-const ORB_PILL = 30;
-const ORB_SHEET = 99; // 64 * 1.55, matching the original hero orb
+const ORB_PILL = 34;
+const ORB_SHEET = 128; // hero orb in the sheet, per the reference
 
 /**
  * Vertical peek and shrink per row behind the front pill.
@@ -77,7 +81,7 @@ export function OrbToastStack({
   onCollapse,
 }: OrbToastStackProps) {
   const insets = useSafeAreaInsets();
-  const { width: screenW } = useWindowDimensions();
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
   const front = toasts[0];
   if (!front) return null;
@@ -134,6 +138,7 @@ export function OrbToastStack({
           toast={front}
           open={isOpen}
           screenW={screenW}
+          screenH={screenH}
           bottomInset={insets.bottom}
           onPress={() => (isOpen ? onCollapse() : onExpand(front.id))}
         />
@@ -174,36 +179,37 @@ function MorphingSurface({
   open,
   onPress,
   screenW,
+  screenH,
   bottomInset,
 }: {
   toast: OrbToast;
   open: boolean;
   onPress: () => void;
   screenW: number;
+  screenH: number;
   bottomInset: number;
 }) {
   const meta = ORB_META[toast.state];
   const progress = useDerivedValue(() => withSpring(open ? 1 : 0, SPRING));
 
-  // A real bottom sheet is full-bleed and flush with the bottom edge, so the
-  // sheet's height swallows the safe-area inset and renders its content above
-  // it. The pill, by contrast, floats with a gap — so the dock gap animates
-  // away as the pill grows.
-  const sheetW = screenW;
-  const sheetH = SHEET.contentHeight + bottomInset;
+  // The sheet is a floating card: inset from both sides, lifted off the bottom
+  // edge, and tall enough to fill most of the screen — matching the reference.
+  const sheetW = screenW - SHEET.sideMargin * 2;
+  const sheetH = Math.min(screenH * 0.62, 520);
 
   const surface = useAnimatedStyle(() => {
     const p = progress.value;
     return {
       width: interpolate(p, [0, 1], [PILL.width, sheetW]),
       height: interpolate(p, [0, 1], [PILL.height, sheetH]),
-      borderTopLeftRadius: interpolate(p, [0, 1], [PILL.radius, SHEET.radius]),
-      borderTopRightRadius: interpolate(p, [0, 1], [PILL.radius, SHEET.radius]),
-      // bottom corners flatten out as it docks against the screen edge
-      borderBottomLeftRadius: interpolate(p, [0, 1], [PILL.radius, 0]),
-      borderBottomRightRadius: interpolate(p, [0, 1], [PILL.radius, 0]),
-      // close the floating gap so the sheet ends flush with the bottom
-      marginBottom: interpolate(p, [0, 1], [0, -(bottomInset + DOCK_GAP)]),
+      // all four corners stay rounded — it never docks against an edge
+      borderRadius: interpolate(p, [0, 1], [PILL.radius, SHEET.radius]),
+      // keep a gap below the card as it grows
+      marginBottom: interpolate(
+        p,
+        [0, 1],
+        [0, Math.max(0, SHEET.bottomGap - DOCK_GAP + bottomInset * 0.2)],
+      ),
     };
   });
 
@@ -217,7 +223,7 @@ function MorphingSurface({
     const h = interpolate(p, [0, 1], [PILL.height, sheetH]);
     // pill: left-aligned, vertically centred. sheet: horizontally centred, high.
     const cx = interpolate(p, [0, 1], [12 + drawn / 2, w / 2]);
-    const cy = interpolate(p, [0, 1], [h / 2, 112]);
+    const cy = interpolate(p, [0, 1], [h / 2, h * 0.32]);
     return {
       position: 'absolute',
       left: cx - drawn / 2,
@@ -245,15 +251,10 @@ function MorphingSurface({
   const sheetText = useAnimatedStyle(() => ({
     opacity: withTiming(open ? 1 : 0, FADE),
   }));
-  const grabber = useAnimatedStyle(() => ({
-    opacity: withTiming(open ? 1 : 0, FADE),
-  }));
 
   return (
     <Pressable onPress={onPress}>
       <Animated.View style={[styles.surface, styles.front, surface]}>
-        <Animated.View style={[styles.grabber, grabber]} pointerEvents="none" />
-
         <Animated.View style={orbWrap} pointerEvents="none">
           <Animated.View style={orbInner}>
             <ParticleOrb state={toast.state} size={ORB_BASE} />
@@ -320,26 +321,17 @@ const styles = StyleSheet.create({
   },
   pillTextWrap: {
     position: 'absolute',
-    left: 12 + ORB_PILL + 10,
+    left: 10 + ORB_PILL + 9,
     right: 14,
     top: 0,
     height: PILL.height,
     justifyContent: 'center',
   },
-  grabber: {
-    position: 'absolute',
-    top: 12,
-    alignSelf: 'center',
-    width: 40,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#3A3A3C',
-  },
   sheetTextWrap: {
     position: 'absolute',
     left: 24,
     right: 24,
-    top: 190,
+    top: '52%',
     alignItems: 'center',
   },
   sheetTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },

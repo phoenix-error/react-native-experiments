@@ -13,21 +13,52 @@ import { MODE_FRAMES, resolvePreset, type OrbState, type OrbSize } from './engin
 /**
  * Renders Jakub Antalik's thinking-orb engine with Skia.
  *
- * Mirrors the threading model of the upstream React Native port: the frame is
- * built and recorded into an SkPicture on the JS thread, then handed to the UI
- * thread where Skia rasterises it. The engine geometry is deliberately NOT
- * worklet-ized (that would require 'worklet' directives throughout the shared
- * engine); rasterisation — the part that must not jank — is on the UI thread
- * either way.
+ * Frames are built and recorded into an SkPicture on the JS thread, then handed
+ * to the UI thread where Skia rasterises them — the same threading model as the
+ * upstream React Native port.
  *
- * This replaces an earlier react-native-svg implementation that allocated one
- * animated <Circle> per dot (up to ~570) and pushed a fresh flat buffer into a
- * shared value every frame. Mounting/unmounting hundreds of SVG nodes during a
- * layout transition was the visible frame drop.
+ * One difference from upstream, and the reason it exists: upstream assumes ONE
+ * orb on screen and gives it its own requestAnimationFrame loop. This app shows
+ * a dozen at once (a 9-cell grid plus the toast stack), and a dozen independent
+ * rAF loops each doing a setState per frame starve each other — every orb ends
+ * up animating at a fraction of the frame rate, which reads as "the animation
+ * is gone". So all orbs share ONE clock and one subscriber list.
  */
 
-// The engine ships tuned presets at 64 and 20 only. Anything below ~52px reads
-// better — and far cheaper — on the sparse 20 preset.
+// ---------------------------------------------------------------------------
+// Shared clock: a single rAF loop that ticks every mounted orb.
+// ---------------------------------------------------------------------------
+
+type Tick = (t: number) => void;
+
+const subscribers = new Set<Tick>();
+let rafId = 0;
+let startedAt = 0;
+
+function pump() {
+  const t = (Date.now() - startedAt) / 1000;
+  // copy: a subscriber may unmount mid-iteration
+  for (const fn of Array.from(subscribers)) fn(t);
+  rafId = requestAnimationFrame(pump);
+}
+
+function subscribe(fn: Tick): () => void {
+  if (subscribers.size === 0) {
+    startedAt = Date.now();
+    rafId = requestAnimationFrame(pump);
+  }
+  subscribers.add(fn);
+  return () => {
+    subscribers.delete(fn);
+    if (subscribers.size === 0 && rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+  };
+}
+
+// The engine ships tuned presets at 64 and 20 only. Below ~52px the sparse
+// 20-preset reads better — and costs far less — than a downscaled 64.
 function nearestPreset(size: number): OrbSize {
   return size < 52 ? 20 : 64;
 }
@@ -112,22 +143,11 @@ export function ParticleOrb({
       setPicture(pic);
     };
 
-    const start = Date.now();
     // draw once even when paused, so the orb is never blank
     record(0);
     if (paused) return;
 
-    let raf = 0;
-    let running = true;
-    const loop = () => {
-      record(((Date.now() - start) / 1000) * speedRef.current);
-      if (running) raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    return () => {
-      running = false;
-      cancelAnimationFrame(raf);
-    };
+    return subscribe((t) => record(t * speedRef.current));
   }, [mode, opts, size, dark, paused, paints, rgba]);
 
   return (
