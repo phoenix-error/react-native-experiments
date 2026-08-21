@@ -57,13 +57,14 @@ const ORB_PILL = 34;
 const ORB_SHEET = 128; // hero orb in the sheet, per the reference
 
 /**
- * Vertical peek and shrink per row behind the front pill.
+ * Stacking, following sonner: the newest pill sits in front, older ones peek
+ * out BELOW it, each shifted down and scaled slightly smaller.
  *
- * PEEK_Y must exceed the corner radius, otherwise a row hides entirely behind
- * the pill in front of it and the stack reads as one smudged blob.
+ * PEEK_Y must clearly exceed the pill's corner radius — a smaller offset
+ * leaves the rows behind hidden and the stack reads as one smudged blob.
  */
-const PEEK_Y = 26;
-const PEEK_SCALE = 0.08;
+const PEEK_Y = 14;
+const PEEK_SCALE = 0.07;
 
 export type OrbToast = { id: string; state: OrbState };
 
@@ -105,10 +106,10 @@ export function OrbToastStack({
         style={[styles.dock, { paddingBottom: insets.bottom + DOCK_GAP }]}
         pointerEvents="box-none"
       >
-        {/* Behind: real pills, shrunk and nudged up. Reversed so the furthest
-            row paints first. They keep full opacity — the shrink and the
-            offset already read as depth, and dimming a near-black pill on a
-            near-black page makes it disappear entirely. */}
+        {/* Older pills peek out BELOW the newest one (sonner's stacking):
+            each row sits lower and slightly smaller. Painted furthest-first so
+            the nearest row ends up on top. They keep full opacity — dimming a
+            near-black pill on a near-black page erases it. */}
         {!isOpen &&
           behind
             .map((t, i) => ({ t, i }))
@@ -122,11 +123,10 @@ export function OrbToastStack({
                 style={[
                   styles.stacked,
                   {
-                    bottom: insets.bottom + DOCK_GAP,
-                    transform: [
-                      { translateY: -(i + 1) * PEEK_Y },
-                      { scale: 1 - (i + 1) * PEEK_SCALE },
-                    ],
+                    // step DOWN per row, so each older pill shows a sliver
+                    bottom: insets.bottom + DOCK_GAP - (i + 1) * PEEK_Y,
+                    transform: [{ scale: 1 - (i + 1) * PEEK_SCALE }],
+                    zIndex: 2 - i,
                   },
                 ]}
               >
