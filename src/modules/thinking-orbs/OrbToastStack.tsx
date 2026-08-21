@@ -42,9 +42,14 @@ const ORB_BASE = 64; // the engine's tuned preset — never changed at runtime
 const ORB_PILL = 30;
 const ORB_SHEET = 99; // 64 * 1.55, matching the original hero orb
 
-/** Vertical peek and shrink per row behind the front toast. */
-const PEEK_Y = 10;
-const PEEK_SCALE = 0.06;
+/**
+ * Vertical peek and shrink per row behind the front pill.
+ *
+ * PEEK_Y must exceed the corner radius, otherwise a row hides entirely behind
+ * the pill in front of it and the stack reads as one smudged blob.
+ */
+const PEEK_Y = 26;
+const PEEK_SCALE = 0.08;
 
 export type OrbToast = { id: string; state: OrbState };
 
