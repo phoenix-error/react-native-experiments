@@ -1,11 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { StyleSheet, Pressable, Text, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -22,42 +15,41 @@ import { ORB_META, SHEET_BODY } from './orbStates';
 import type { OrbState } from './engine';
 
 /**
- * A bottom-anchored toast stack that MORPHS into a bottom sheet.
+ * A bottom-docked toast stack that MORPHS into a bottom sheet.
  *
- * Design notes:
- * - It is an OVERLAY: absolutely filling its parent with `pointerEvents="box-none"`,
- *   so it floats above the page instead of taking part in its layout.
- * - Toast and sheet are the SAME surface. One shared `progress` value
- *   interpolates width / height / radius, so the pill visibly grows into the
- *   sheet rather than cross-fading between two components.
- * - The orb is rendered ONCE at the engine's tuned 64pt preset and scaled with
- *   a transform. Changing its `size` prop mid-morph would re-resolve the preset
- *   and rebuild the whole Skia pipeline — the old frame-drop.
- * - Stacked toasts sit behind the front one (scaled down, nudged up), the
- *   sonner pattern. They fade out while the sheet opens.
+ * - It is an OVERLAY: absolutely filling its parent with pointerEvents
+ *   "box-none", so it floats above the page instead of taking part in its
+ *   layout.
+ * - Toast and sheet are the SAME surface: one spring `progress` interpolates
+ *   width / height / radius, so the pill visibly grows into the sheet.
+ * - Toasts behind the front one are REAL toasts (orb + label), scaled down and
+ *   nudged up — the sonner stacking pattern. They are only referenced for the
+ *   interaction model; no dependency is used.
+ * - The orb is drawn once at the engine's tuned 64pt preset and only scaled.
+ *   Re-resolving its preset mid-morph rebuilds the whole Skia pipeline, which
+ *   is what made the transition drop frames.
  */
 
-// Snappy: reaches the target fast, settles without a wobble.
-const SPRING = { damping: 26, stiffness: 420, mass: 0.7 } as const;
-const FADE = { duration: 120, easing: Easing.out(Easing.quad) } as const;
+// Finger-driven settle: quick, with a touch of overshoot.
+const SPRING = { damping: 20, stiffness: 260, mass: 0.8 } as const;
+const FADE = { duration: 110, easing: Easing.out(Easing.quad) } as const;
 
-const TOAST_H = 62;
-const TOAST_R = 18;
-const SHEET_H = 300;
-const SHEET_R = 34;
-const SIDE = 14;
+// Original pill / sheet geometry.
+const PILL = { width: 190, height: 46, radius: 23 };
+const SHEET = { width: 320, height: 300, radius: 40 };
 
-/** Orb is drawn at this size and only ever scaled. */
-const ORB_BASE = 64;
+const ORB_BASE = 64; // the engine's tuned preset — never changed at runtime
+const ORB_PILL = 30;
+const ORB_SHEET = 99; // 64 * 1.55, matching the original hero orb
 
-export type OrbToast = {
-  id: string;
-  state: OrbState;
-};
+/** Vertical peek and shrink per row behind the front toast. */
+const PEEK_Y = 10;
+const PEEK_SCALE = 0.06;
+
+export type OrbToast = { id: string; state: OrbState };
 
 export type OrbToastStackProps = {
   toasts: OrbToast[];
-  /** Which toast is currently expanded into a sheet, if any. */
   expandedId: string | null;
   onExpand: (id: string) => void;
   onCollapse: () => void;
@@ -70,56 +62,60 @@ export function OrbToastStack({
   onCollapse,
 }: OrbToastStackProps) {
   const insets = useSafeAreaInsets();
-  const { width: screenW } = useWindowDimensions();
 
   const front = toasts[0];
-  const behind = toasts.slice(1, 3); // at most two peeking behind
-
   if (!front) return null;
 
   const isOpen = expandedId === front.id;
+  const behind = toasts.slice(1, 3); // at most two peek out behind
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {/* Dim + catch outside taps only while open */}
       {isOpen ? (
-        <AnimatedBackdrop onPress={onCollapse} />
+        <Animated.View
+          entering={FadeIn.duration(140)}
+          exiting={FadeOut.duration(140)}
+          style={StyleSheet.absoluteFill}
+        >
+          <Pressable style={styles.backdrop} onPress={onCollapse} />
+        </Animated.View>
       ) : null}
 
       <View
-        style={[styles.dock, { paddingBottom: insets.bottom + 22 }]}
+        style={[styles.dock, { paddingBottom: insets.bottom + 20 }]}
         pointerEvents="box-none"
       >
-        {/* Toasts peeking out behind the front one */}
+        {/* Behind: real toasts, shrunk and nudged up. Reversed so the
+            furthest row paints first. */}
         {!isOpen &&
-          behind.map((t, i) => (
-            <Animated.View
-              key={t.id}
-              entering={FadeIn.duration(160)}
-              exiting={FadeOut.duration(120)}
-              pointerEvents="none"
-              style={[
-                styles.surface,
-                styles.behind,
-                {
-                  width: screenW - SIDE * 2,
-                  height: TOAST_H,
-                  borderRadius: TOAST_R,
-                  bottom: insets.bottom + 22,
-                  transform: [
-                    { translateY: -(i + 1) * 9 },
-                    { scale: 1 - (i + 1) * 0.05 },
-                  ],
-                  opacity: 1 - (i + 1) * 0.35,
-                },
-              ]}
-            />
-          ))}
+          behind
+            .map((t, i) => ({ t, i }))
+            .reverse()
+            .map(({ t, i }) => (
+              <Animated.View
+                key={t.id}
+                entering={FadeIn.duration(160)}
+                exiting={FadeOut.duration(110)}
+                pointerEvents="none"
+                style={[
+                  styles.stacked,
+                  {
+                    bottom: insets.bottom + 20,
+                    transform: [
+                      { translateY: -(i + 1) * PEEK_Y },
+                      { scale: 1 - (i + 1) * PEEK_SCALE },
+                    ],
+                    opacity: 1 - (i + 1) * 0.25,
+                  },
+                ]}
+              >
+                <Pill state={t.state} />
+              </Animated.View>
+            ))}
 
         <MorphingSurface
           toast={front}
           open={isOpen}
-          screenW={screenW}
           onPress={() => (isOpen ? onCollapse() : onExpand(front.id))}
         />
       </View>
@@ -127,27 +123,27 @@ export function OrbToastStack({
   );
 }
 
-function AnimatedBackdrop({ onPress }: { onPress: () => void }) {
+/** A plain, non-animated pill — used for the rows sitting behind the front. */
+function Pill({ state }: { state: OrbState }) {
   return (
-    <Animated.View
-      entering={FadeIn.duration(140)}
-      exiting={FadeOut.duration(140)}
-      style={StyleSheet.absoluteFill}
-    >
-      <Pressable style={styles.backdrop} onPress={onPress} />
-    </Animated.View>
+    <View style={[styles.surface, styles.pillBox]}>
+      <View style={styles.pillRow}>
+        <ParticleOrb state={state} size={ORB_PILL} />
+        <Text style={styles.pillLabel} numberOfLines={1}>
+          {ORB_META[state].label}
+        </Text>
+      </View>
+    </View>
   );
 }
 
 function MorphingSurface({
   toast,
   open,
-  screenW,
   onPress,
 }: {
   toast: OrbToast;
   open: boolean;
-  screenW: number;
   onPress: () => void;
 }) {
   const meta = ORB_META[toast.state];
@@ -156,24 +152,23 @@ function MorphingSurface({
   const surface = useAnimatedStyle(() => {
     const p = progress.value;
     return {
-      width: interpolate(p, [0, 1], [screenW - SIDE * 2, screenW - SIDE]),
-      height: interpolate(p, [0, 1], [TOAST_H, SHEET_H]),
-      borderRadius: interpolate(p, [0, 1], [TOAST_R, SHEET_R]),
+      width: interpolate(p, [0, 1], [PILL.width, SHEET.width]),
+      height: interpolate(p, [0, 1], [PILL.height, SHEET.height]),
+      borderRadius: interpolate(p, [0, 1], [PILL.radius, SHEET.radius]),
     };
   });
 
-  // Orb: ONE canvas at the engine's tuned preset, only moved and scaled.
-  //
-  // `transform: scale` scales around the view's CENTRE, not its origin, so the
-  // wrapper is sized to the DRAWN diameter and the oversized canvas is centred
-  // inside it with negative margins. That keeps the visual box equal to the
-  // layout box — anchoring by the unscaled 64pt box is what pushed the orb into
-  // the label before.
+  // `transform: scale` scales around the view's CENTRE, so the wrapper is sized
+  // to the DRAWN diameter and the oversized canvas is centred inside it —
+  // anchoring by the unscaled 64pt box leaves the orb visually offset.
   const orbWrap = useAnimatedStyle(() => {
     const p = progress.value;
-    const drawn = interpolate(p, [0, 1], [30, 104]);
-    const cx = interpolate(p, [0, 1], [14 + drawn / 2, (screenW - SIDE) / 2]);
-    const cy = interpolate(p, [0, 1], [TOAST_H / 2, 118]);
+    const drawn = interpolate(p, [0, 1], [ORB_PILL, ORB_SHEET]);
+    const w = interpolate(p, [0, 1], [PILL.width, SHEET.width]);
+    const h = interpolate(p, [0, 1], [PILL.height, SHEET.height]);
+    // pill: left-aligned, vertically centred. sheet: horizontally centred, high.
+    const cx = interpolate(p, [0, 1], [12 + drawn / 2, w / 2]);
+    const cy = interpolate(p, [0, 1], [h / 2, 108]);
     return {
       position: 'absolute',
       left: cx - drawn / 2,
@@ -185,18 +180,17 @@ function MorphingSurface({
 
   const orbInner = useAnimatedStyle(() => {
     const p = progress.value;
-    const drawn = interpolate(p, [0, 1], [30, 104]);
-    const scale = drawn / ORB_BASE;
+    const drawn = interpolate(p, [0, 1], [ORB_PILL, ORB_SHEET]);
     const inset = -(ORB_BASE - drawn) / 2;
     return {
       position: 'absolute',
       left: inset,
       top: inset,
-      transform: [{ scale }],
+      transform: [{ scale: drawn / ORB_BASE }],
     };
   });
 
-  const toastText = useAnimatedStyle(() => ({
+  const pillText = useAnimatedStyle(() => ({
     opacity: withTiming(open ? 0 : 1, FADE),
   }));
   const sheetText = useAnimatedStyle(() => ({
@@ -217,14 +211,14 @@ function MorphingSurface({
           </Animated.View>
         </Animated.View>
 
-        {/* compact label, sits to the right of the small orb */}
-        <Animated.View style={[styles.toastTextWrap, toastText]} pointerEvents="none">
-          <Text style={styles.toastLabel} numberOfLines={1}>
+        {/* pill label, to the right of the small orb */}
+        <Animated.View style={[styles.pillTextWrap, pillText]} pointerEvents="none">
+          <Text style={styles.pillLabel} numberOfLines={1}>
             {meta.label}
           </Text>
         </Animated.View>
 
-        {/* sheet copy, below the big orb */}
+        {/* sheet copy, below the hero orb */}
         <Animated.View style={[styles.sheetTextWrap, sheetText]} pointerEvents="none">
           <Text style={styles.sheetTitle}>{meta.label}</Text>
           <Text style={styles.sheetBody}>{SHEET_BODY}</Text>
@@ -244,49 +238,69 @@ const styles = StyleSheet.create({
   },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   surface: {
-    backgroundColor: '#0E0E11',
+    backgroundColor: '#000',
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#2A2A31',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 24,
-    elevation: 16,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 14,
   },
-  front: { zIndex: 2 },
-  behind: { position: 'absolute', zIndex: 1 },
-  grabber: {
-    position: 'absolute',
-    top: 10,
-    alignSelf: 'center',
-    width: 38,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: '#3A3A42',
-  },
-  toastTextWrap: {
-    position: 'absolute',
-    left: 60,
-    right: 16,
-    top: 0,
-    height: TOAST_H,
+  front: { zIndex: 3 },
+  stacked: { position: 'absolute', zIndex: 1 },
+  pillBox: {
+    width: PILL.width,
+    height: PILL.height,
+    borderRadius: PILL.radius,
     justifyContent: 'center',
   },
-  toastLabel: { color: '#F2F2F5', fontSize: 15, fontWeight: '600' },
+  pillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 12,
+    paddingRight: 16,
+    gap: 10,
+  },
+  pillLabel: {
+    color: '#F2F2F2',
+    fontSize: 15,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  pillTextWrap: {
+    position: 'absolute',
+    left: 12 + ORB_PILL + 10,
+    right: 14,
+    top: 0,
+    height: PILL.height,
+    justifyContent: 'center',
+  },
+  grabber: {
+    position: 'absolute',
+    top: 12,
+    alignSelf: 'center',
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#3A3A3C',
+  },
   sheetTextWrap: {
     position: 'absolute',
     left: 24,
     right: 24,
-    top: 186,
+    top: 178,
     alignItems: 'center',
   },
-  sheetTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  sheetTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700' },
   sheetBody: {
-    color: '#8E8E98',
+    color: '#8E8E93',
     fontSize: 14,
-    lineHeight: 20,
+    fontWeight: '500',
     textAlign: 'center',
+    lineHeight: 20,
     marginTop: 8,
+    paddingHorizontal: 6,
   },
 });
