@@ -1,5 +1,5 @@
 import { useLocalSearchParams, Stack } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { getModule } from '@/modules/registry';
 
 export default function ModuleRoute() {
@@ -14,43 +14,24 @@ export default function ModuleRoute() {
     );
   }
 
+  // The detail view owns the whole screen: it scrolls its own content and
+  // renders overlays (toasts, sheets) on top, so it must NOT be wrapped in
+  // another ScrollView here.
   return (
     <View style={styles.root}>
       <Stack.Screen options={{ title: mod.brand }} />
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.title}>{mod.title}</Text>
-        {mod.description ? (
-          <Text style={styles.desc}>{mod.description}</Text>
-        ) : null}
-        <View style={styles.stage}>{mod.detail ?? mod.preview}</View>
-      </ScrollView>
+      {mod.detail ?? mod.preview}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
-  body: { paddingBottom: 48 },
-  title: {
-    color: '#fff',
-    fontSize: 26,
-    fontWeight: '700',
-    paddingHorizontal: 20,
-    marginTop: 4,
-  },
-  desc: {
-    color: '#8E8E98',
-    fontSize: 14,
-    lineHeight: 20,
-    paddingHorizontal: 20,
-    marginTop: 8,
-  },
-  stage: { marginTop: 12, minHeight: 560 },
+  root: { flex: 1, backgroundColor: '#0B0B0D' },
   missing: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#000',
+    backgroundColor: '#0B0B0D',
   },
   missingText: { color: '#8E8E98' },
 });

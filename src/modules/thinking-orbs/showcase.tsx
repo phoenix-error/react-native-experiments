@@ -1,92 +1,82 @@
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ParticleOrb } from './ParticleOrb';
-import { DynamicIsland } from './DynamicIsland';
+import { OrbToastStack, type OrbToast } from './OrbToastStack';
 import { ORB_META, ORB_ORDER } from './orbStates';
 import type { OrbState } from './engine';
 import type { ShowcaseModule } from '../types';
 
-/** Cycles the orb states so a feed preview is never static. */
-function useCycledState(intervalMs = 2800): OrbState {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setI((n) => n + 1), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return ORB_ORDER[i % ORB_ORDER.length];
-}
+let seq = 0;
+const nextId = () => `t${++seq}`;
 
-/** Feed preview: the bottom pill breathing open into its sheet. */
-function BottomSheetPreview() {
-  const state = useCycledState(5200);
-  const [expanded, setExpanded] = useState(true);
+/**
+ * Detail screen: the real demo.
+ *
+ * Settings live at the top of the page; the toasts are an OVERLAY on top of
+ * everything, docked to the bottom. Tapping a toast morphs it into a bottom
+ * sheet; tapping outside morphs it back into the stack.
+ */
+function OrbPlayground() {
+  const [toasts, setToasts] = useState<OrbToast[]>([
+    { id: nextId(), state: 'composing' },
+  ]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Hold the sheet open longer than the pill, and stagger against the state
-  // cycle so the card isn't caught mid-transition every time it's sampled.
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const step = (open: boolean) => {
-      if (cancelled) return;
-      setExpanded(open);
-      timer = setTimeout(() => step(!open), open ? 3600 : 1900);
-    };
-    timer = setTimeout(() => step(false), 3600);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
+  const push = useCallback((state: OrbState) => {
+    setToasts((prev) => [{ id: nextId(), state }, ...prev].slice(0, 4));
+  }, []);
+
+  const clear = useCallback(() => {
+    setToasts([]);
+    setExpandedId(null);
   }, []);
 
   return (
-    <View style={styles.previewRoot}>
-      {/* A faint app-like backdrop so the black pill/sheet reads as a
-          floating surface instead of vanishing into a black screen. */}
-      <View style={styles.backdrop}>
-        <View style={[styles.skelLine, { width: '52%' }]} />
-        <View style={[styles.skelLine, { width: '78%' }]} />
-        <View style={[styles.skelCard]} />
-        <View style={[styles.skelLine, { width: '64%' }]} />
-        <View style={[styles.skelLine, { width: '40%' }]} />
-      </View>
-      <View style={styles.sheetSlot}>
-        <DynamicIsland
-          state={state}
-          expanded={expanded}
-          onPress={() => setExpanded((e) => !e)}
-        />
-      </View>
+    <View style={styles.root}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.section}>Push a toast</Text>
+        <View style={styles.grid}>
+          {ORB_ORDER.map((s) => (
+            <Pressable
+              key={s}
+              onPress={() => push(s)}
+              style={({ pressed }) => [styles.cell, pressed && styles.pressed]}
+            >
+              <ParticleOrb state={s} size={38} />
+              <Text style={styles.cellLabel} numberOfLines={1}>
+                {ORB_META[s].label.replace('…', '').replace('Agent ', '')}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.row}>
+          <Pressable onPress={clear} style={styles.btn}>
+            <Text style={styles.btnText}>Clear</Text>
+          </Pressable>
+          <Text style={styles.hint}>
+            tap a toast to open · tap outside to close
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* Overlay — floats above the page, docked bottom */}
+      <OrbToastStack
+        toasts={toasts}
+        expandedId={expandedId}
+        onExpand={setExpandedId}
+        onCollapse={() => setExpandedId(null)}
+      />
     </View>
   );
 }
 
-/** Detail screen: full interactive playground. */
-function OrbPlayground() {
-  const [state, setState] = useState<OrbState>('composing');
-  const [expanded, setExpanded] = useState(true);
-
+/** Feed preview stays as-is for now. */
+function FeedPreview() {
   return (
-    <View style={styles.playRoot}>
-      <View style={styles.playStage}>
-        <DynamicIsland
-          state={state}
-          expanded={expanded}
-          onPress={() => setExpanded((e) => !e)}
-        />
-      </View>
-      <View style={styles.playGrid}>
-        {ORB_ORDER.map((s) => (
-          <View
-            key={s}
-            style={[styles.playCell, state === s && styles.playCellActive]}
-            onTouchEnd={() => setState(s)}
-          >
-            <ParticleOrb state={s} size={40} />
-            <Text style={styles.playLabel} numberOfLines={1}>
-              {ORB_META[s].label.replace('…', '').replace('Agent ', '')}
-            </Text>
-          </View>
-        ))}
+    <View style={styles.previewRoot}>
+      <View style={styles.previewOrb}>
+        <ParticleOrb state="composing" size={64} />
       </View>
     </View>
   );
@@ -96,69 +86,59 @@ export const thinkingOrbsModule: ShowcaseModule = {
   id: 'thinking-orbs',
   brand: 'Thinking orbs',
   badge: 'new drop',
-  title: 'Dynamic Island bottom sheet',
+  title: 'Toast stack that morphs into a sheet',
   description:
-    'A bottom status pill that springs up into a sheet, with nine dotted particle-orb states.',
+    'Bottom-docked toasts that grow into a bottom sheet when tapped, with nine dotted particle-orb states.',
   icon: <ParticleOrb state="composing" size={38} />,
-  preview: <BottomSheetPreview />,
+  preview: <FeedPreview />,
   detail: <OrbPlayground />,
 };
 
 const styles = StyleSheet.create({
-  previewRoot: { flex: 1, backgroundColor: '#0B0B0D', alignItems: 'center' },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingTop: 26,
-    paddingHorizontal: 18,
-    gap: 10,
+  root: { flex: 1, backgroundColor: '#0B0B0D' },
+  content: { padding: 18, paddingBottom: 200 },
+  section: {
+    color: '#8E8E9A',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: 14,
   },
-  skelLine: {
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#17171C',
-  },
-  skelCard: {
-    height: 74,
-    borderRadius: 14,
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  cell: {
+    width: 96,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 16,
     backgroundColor: '#131318',
-    marginVertical: 4,
-  },
-  // The phone is cropped by the panel, so keep the pill/sheet in the upper
-  // area that stays visible rather than pinning it to the device bottom.
-  sheetSlot: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 40,
-    transform: [{ scale: 0.72 }],
-  },
-  playRoot: { flex: 1, backgroundColor: '#000' },
-  playStage: {
-    height: 340,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingBottom: 20,
-  },
-  playGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-  },
-  playCell: {
-    width: 82,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#1E1E24',
+    borderColor: '#22222A',
   },
-  playCellActive: { borderColor: '#4C6BFF', backgroundColor: '#12121A' },
-  playLabel: { color: '#8E8E98', fontSize: 9, fontWeight: '600', marginTop: 2 },
+  pressed: { opacity: 0.7 },
+  cellLabel: {
+    color: '#9A9AA6',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  row: { marginTop: 22, gap: 12 },
+  btn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    backgroundColor: '#17171F',
+    borderWidth: 1,
+    borderColor: '#26262F',
+  },
+  btnText: { color: '#D8D8E0', fontSize: 13, fontWeight: '600' },
+  hint: { color: '#55555F', fontSize: 12 },
+  previewRoot: {
+    flex: 1,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewOrb: { transform: [{ scale: 1.2 }] },
 });

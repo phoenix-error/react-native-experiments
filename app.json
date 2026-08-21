@@ -48,6 +48,13 @@
         "projectId": "2435c496-0d5a-4b50-b6f6-6252cb300fa8"
       }
     },
-    "owner": "phoenix-error"
+    "owner": "phoenix-error",
+    "updates": {
+      "url": "https://u.expo.dev/2435c496-0d5a-4b50-b6f6-6252cb300fa8",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
