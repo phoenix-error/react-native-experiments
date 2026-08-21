@@ -130,7 +130,12 @@ export function OrbToastStack({
                         // hang BELOW the front pill, each row a little lower
                         bottom: -(i + 1) * PEEK_Y,
                         transform: [{ scale: 1 - (i + 1) * PEEK_SCALE }],
-                        zIndex: -(i + 1),
+                        // NOTE: keep this POSITIVE. A negative zIndex puts the
+                        // row behind its own parent on iOS, which clips it away
+                        // entirely — that's why the stack looked like a single
+                        // pill. Front pill uses zIndex 3, so 2, 1, ... sit under
+                        // it while staying in front of the parent.
+                        zIndex: 2 - i,
                       },
                     ]}
                 >
