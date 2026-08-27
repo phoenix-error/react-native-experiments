@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "showcase",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "app.lucabecker.react-native-experiments",
       "supportsTablet": true,
@@ -25,11 +25,13 @@
       "package": "app.lucabecker.reactnativeexperiments"
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png",
+      "output": "static"
     },
     "plugins": [
       "expo-router",
+      "expo-dev-client",
       [
         "expo-splash-screen",
         {

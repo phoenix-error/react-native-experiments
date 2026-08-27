@@ -16,7 +16,12 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 
 ### Visual UI testing
 
-Always verify UI/component changes on a booted iOS Simulator before finishing. Use Argent (`screenshot`, `describe`, tap by label) and serve-sim (stream + drive). Check light and dark when appearance is in play. Full steps: AGENTS.md → UI verification.
+Always verify UI/component changes on a booted iOS Simulator before finishing. A screenshot of first paint is not enough — exercise the changed screen.
+
+- **Argent MCP** (`user-argent`): `list-devices` → boot if needed → `launch-app` with `app.lucabecker.react-native-experiments` → `describe` / `screenshot` / tap by label. After JS edits, `debugger-reload-metro`. Skills: `argent-react-native-app-workflow`, `argent-device-interact`.
+- **serve-sim**: `.agents/skills/serve-sim/SKILL.md`. `npx serve-sim --detach -q`, then `npx serve-sim tap <x> <y>` (normalized 0..1). Metro mounts the preview at `/.sim` when Expo is running.
+
+When the work touches theme, color, or layout, check **light and dark** via the in-app theme toggle. Full steps: AGENTS.md → UI verification.
 
 ### Theming
 

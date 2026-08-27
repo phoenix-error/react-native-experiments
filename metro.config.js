@@ -27,5 +27,6 @@ config.server.enhanceMiddleware = (metroMiddleware, server) => {
 
 export default withNativeWind(config, {
   configPath: 'tailwind.config.cjs',
+  inlineRem: 16,
   input: './src/global.css',
 });
