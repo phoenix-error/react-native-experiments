@@ -10,9 +10,10 @@ Using the real engine (rather than re-implementing the geometry) is what makes
 the orbs faithful to the reference by construction. `ParticleOrb.tsx` (one
 level up) is the only original code here: it drives `MODE_FRAMES` from a single
 `requestAnimationFrame` loop and paints each frame's dot/line list with SVG,
-mirroring the threading model of the upstream React Native port.
+mirroring the threading model of the upstream React Native port (Skia, not SVG).
 
 Local changes:
+
 - `core.ts` — removed the `paint` / `paintLines` / `paintFrame` canvas
   functions (2D-canvas only); kept all pure geometry.
 - `types.ts` — dropped the `ModeDraw` canvas painter type.

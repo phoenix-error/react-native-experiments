@@ -1,9 +1,9 @@
 import {
-  StyleSheet,
   Pressable,
+  StyleSheet,
   Text,
-  View,
   useWindowDimensions,
+  View,
 } from 'react-native';
 import Animated, {
   Easing,
@@ -16,58 +16,36 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ParticleOrb } from './ParticleOrb';
-import { ORB_META, SHEET_BODY } from './orbStates';
-import type { OrbState } from './engine';
+
+import {
+  ORB_META,
+  SHEET_BODY,
+  type OrbState,
+  type OrbToast,
+} from '../lib/orb-states';
+import { ParticleOrb } from './particle-orb';
 
 /**
- * A bottom-docked toast stack that MORPHS into a bottom sheet.
+ * A bottom-docked toast stack that morphs into a bottom sheet.
  *
- * - It is an OVERLAY: absolutely filling its parent with pointerEvents
- *   "box-none", so it floats above the page instead of taking part in its
- *   layout.
- * - Toast and sheet are the SAME surface: one spring `progress` interpolates
- *   width / height / radius, so the pill visibly grows into the sheet.
- * - Toasts behind the front one are REAL toasts (orb + label), scaled down and
- *   nudged up — the sonner stacking pattern. They are only referenced for the
- *   interaction model; no dependency is used.
- * - The orb is drawn once at the engine's tuned 64pt preset and only scaled.
- *   Re-resolving its preset mid-morph rebuilds the whole Skia pipeline, which
- *   is what made the transition drop frames.
+ * Toast and sheet are the same surface: one spring `progress` interpolates
+ * width / height / radius, so the pill visibly grows into the sheet. The orb
+ * is drawn once at the engine's tuned 64pt preset and only scaled.
  */
 
-// Finger-driven settle: quick, with a touch of overshoot.
 const SPRING = { damping: 20, stiffness: 260, mass: 0.8 } as const;
 const FADE = { duration: 110, easing: Easing.out(Easing.quad) } as const;
 
-// Geometry measured off the reference video (frame-by-frame, see README):
-//
-// PILL  — compact, only as wide as its content (~45% of the screen), floating
-//         above the bottom edge. The orb nearly fills it vertically.
-// SHEET — a FLOATING CARD, not an edge-to-edge bottom sheet: a visible margin
-//         on both sides, a clear gap below it, and all four corners rounded.
-//         It fills most of the screen. No grabber.
 const PILL = { width: 168, height: 44, radius: 22 };
 const SHEET = { radius: 34, sideMargin: 22, bottomGap: 26 };
-/** Gap between the docked pill and the bottom edge. */
 const DOCK_GAP = 46;
 
-const ORB_BASE = 64; // the engine's tuned preset — never changed at runtime
+const ORB_BASE = 64;
 const ORB_PILL = 34;
-const ORB_SHEET = 128; // hero orb in the sheet, per the reference
+const ORB_SHEET = 128;
 
-/**
- * Stacking, following sonner: the newest pill sits in front, older ones peek
- * out BELOW it, each shifted down and scaled slightly smaller.
- *
- * PEEK_Y must clearly exceed the pill's corner radius (22) — below that the
- * rows behind hide inside the front pill's rounded ends and the stack reads as
- * one smudged blob.
- */
 const PEEK_Y = 30;
 const PEEK_SCALE = 0.07;
-
-export type OrbToast = { id: string; state: OrbState };
 
 export type OrbToastStackProps = {
   toasts: OrbToast[];
@@ -86,71 +64,65 @@ export function OrbToastStack({
   const { width: screenW, height: screenH } = useWindowDimensions();
 
   const front = toasts[0];
-  if (!front) return null;
+  if (!front) {
+    return null;
+  }
 
   const isOpen = expandedId === front.id;
-  const behind = toasts.slice(1, 3); // at most two peek out behind
+  const behind = toasts.slice(1, 3);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       {isOpen ? (
         <Animated.View
           entering={FadeIn.duration(140)}
           exiting={FadeOut.duration(140)}
           style={StyleSheet.absoluteFill}
         >
-          <Pressable style={styles.backdrop} onPress={onCollapse} />
+          <Pressable
+            accessibilityLabel="Dismiss sheet"
+            accessibilityRole="button"
+            onPress={onCollapse}
+            style={styles.backdrop}
+          />
         </Animated.View>
       ) : null}
 
       <View
-        style={[styles.dock, { paddingBottom: insets.bottom + DOCK_GAP }]}
         pointerEvents="box-none"
+        style={[styles.dock, { paddingBottom: insets.bottom + DOCK_GAP }]}
       >
-        {/* The stack is anchored to the FRONT pill, not to the dock: absolute
-            children lay out against their parent's PADDING box, so mixing the
-            dock's paddingBottom with a `bottom` offset counted the dock gap
-            twice and threw the older rows above the front pill.
-            This wrapper auto-sizes to the front pill; older rows hang BELOW it
-            with a negative offset, so no fixed height is needed and the sheet
-            can still grow freely. */}
-        <View style={styles.stackAnchor} pointerEvents="box-none">
+        <View pointerEvents="box-none" style={styles.stackAnchor}>
           {!isOpen &&
             behind
               .map((t, i) => ({ t, i }))
-              .reverse()
+              .toReversed()
               .map(({ t, i }) => (
                 <Animated.View
-                  key={t.id}
                   entering={FadeIn.duration(160)}
                   exiting={FadeOut.duration(110)}
+                  key={t.id}
                   pointerEvents="none"
-                    style={[
-                      styles.stacked,
-                      {
-                        // hang BELOW the front pill, each row a little lower
-                        bottom: -(i + 1) * PEEK_Y,
-                        transform: [{ scale: 1 - (i + 1) * PEEK_SCALE }],
-                        // NOTE: keep this POSITIVE. A negative zIndex puts the
-                        // row behind its own parent on iOS, which clips it away
-                        // entirely — that's why the stack looked like a single
-                        // pill. Front pill uses zIndex 3, so 2, 1, ... sit under
-                        // it while staying in front of the parent.
-                        zIndex: 2 - i,
-                      },
-                    ]}
+                  style={[
+                    styles.stacked,
+                    {
+                      bottom: -(i + 1) * PEEK_Y,
+                      transform: [{ scale: 1 - (i + 1) * PEEK_SCALE }],
+                      zIndex: 2 - i,
+                    },
+                  ]}
                 >
-                  <Pill state={t.state} depth={i + 1} />
+                  <Pill depth={i + 1} state={t.state} />
                 </Animated.View>
               ))}
 
           <MorphingSurface
-            toast={front}
-            open={isOpen}
-            screenW={screenW}
-            screenH={screenH}
             bottomInset={insets.bottom}
             onPress={() => (isOpen ? onCollapse() : onExpand(front.id))}
+            open={isOpen}
+            screenH={screenH}
+            screenW={screenW}
+            toast={front}
           />
         </View>
       </View>
@@ -158,11 +130,6 @@ export function OrbToastStack({
   );
 }
 
-/**
- * A plain, non-animated pill — used for the rows sitting behind the front one.
- * Deeper rows get a slightly lighter surface and a brighter border so they
- * separate from the page instead of melting into it.
- */
 function Pill({ state, depth = 0 }: { state: OrbState; depth?: number }) {
   return (
     <View
@@ -170,14 +137,15 @@ function Pill({ state, depth = 0 }: { state: OrbState; depth?: number }) {
         styles.surface,
         styles.pillBox,
         {
-          backgroundColor: depth === 0 ? '#000' : depth === 1 ? '#131317' : '#1A1A20',
+          backgroundColor:
+            depth === 0 ? '#000' : depth === 1 ? '#131317' : '#1A1A20',
           borderColor: depth === 0 ? '#2A2A31' : '#33333C',
         },
       ]}
     >
       <View style={styles.pillRow}>
-        <ParticleOrb state={state} size={ORB_PILL} />
-        <Text style={styles.pillLabel} numberOfLines={1}>
+        <ParticleOrb size={ORB_PILL} state={state} />
+        <Text numberOfLines={1} style={styles.pillLabel}>
           {ORB_META[state].label}
         </Text>
       </View>
@@ -203,8 +171,6 @@ function MorphingSurface({
   const meta = ORB_META[toast.state];
   const progress = useDerivedValue(() => withSpring(open ? 1 : 0, SPRING));
 
-  // The sheet is a floating card: inset from both sides, lifted off the bottom
-  // edge, and tall enough to fill most of the screen — matching the reference.
   const sheetW = screenW - SHEET.sideMargin * 2;
   const sheetH = Math.min(screenH * 0.62, 520);
 
@@ -213,9 +179,7 @@ function MorphingSurface({
     return {
       width: interpolate(p, [0, 1], [PILL.width, sheetW]),
       height: interpolate(p, [0, 1], [PILL.height, sheetH]),
-      // all four corners stay rounded — it never docks against an edge
       borderRadius: interpolate(p, [0, 1], [PILL.radius, SHEET.radius]),
-      // keep a gap below the card as it grows
       marginBottom: interpolate(
         p,
         [0, 1],
@@ -224,19 +188,15 @@ function MorphingSurface({
     };
   });
 
-  // `transform: scale` scales around the view's CENTRE, so the wrapper is sized
-  // to the DRAWN diameter and the oversized canvas is centred inside it —
-  // anchoring by the unscaled 64pt box leaves the orb visually offset.
   const orbWrap = useAnimatedStyle(() => {
     const p = progress.value;
     const drawn = interpolate(p, [0, 1], [ORB_PILL, ORB_SHEET]);
     const w = interpolate(p, [0, 1], [PILL.width, sheetW]);
     const h = interpolate(p, [0, 1], [PILL.height, sheetH]);
-    // pill: left-aligned, vertically centred. sheet: horizontally centred, high.
     const cx = interpolate(p, [0, 1], [12 + drawn / 2, w / 2]);
     const cy = interpolate(p, [0, 1], [h / 2, h * 0.32]);
     return {
-      position: 'absolute',
+      position: 'absolute' as const,
       left: cx - drawn / 2,
       top: cy - drawn / 2,
       width: drawn,
@@ -249,7 +209,7 @@ function MorphingSurface({
     const drawn = interpolate(p, [0, 1], [ORB_PILL, ORB_SHEET]);
     const inset = -(ORB_BASE - drawn) / 2;
     return {
-      position: 'absolute',
+      position: 'absolute' as const,
       left: inset,
       top: inset,
       transform: [{ scale: drawn / ORB_BASE }],
@@ -264,23 +224,31 @@ function MorphingSurface({
   }));
 
   return (
-    <Pressable onPress={onPress}>
+    <Pressable
+      accessibilityLabel={open ? 'Collapse toast' : `${meta.label} toast`}
+      accessibilityRole="button"
+      onPress={onPress}
+    >
       <Animated.View style={[styles.surface, styles.front, surface]}>
-        <Animated.View style={orbWrap} pointerEvents="none">
+        <Animated.View pointerEvents="none" style={orbWrap}>
           <Animated.View style={orbInner}>
-            <ParticleOrb state={toast.state} size={ORB_BASE} />
+            <ParticleOrb size={ORB_BASE} state={toast.state} />
           </Animated.View>
         </Animated.View>
 
-        {/* pill label, to the right of the small orb */}
-        <Animated.View style={[styles.pillTextWrap, pillText]} pointerEvents="none">
-          <Text style={styles.pillLabel} numberOfLines={1}>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.pillTextWrap, pillText]}
+        >
+          <Text numberOfLines={1} style={styles.pillLabel}>
             {meta.label}
           </Text>
         </Animated.View>
 
-        {/* sheet copy, below the hero orb */}
-        <Animated.View style={[styles.sheetTextWrap, sheetText]} pointerEvents="none">
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.sheetTextWrap, sheetText]}
+        >
           <Text style={styles.sheetTitle}>{meta.label}</Text>
           <Text style={styles.sheetBody}>{SHEET_BODY}</Text>
         </Animated.View>
@@ -310,7 +278,6 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   front: { zIndex: 3 },
-  /** Base: sizing is applied inline, and only while collapsed. */
   stackAnchor: { alignItems: 'center' },
   stacked: { position: 'absolute' },
   pillBox: {

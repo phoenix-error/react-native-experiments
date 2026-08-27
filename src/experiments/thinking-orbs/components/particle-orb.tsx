@@ -1,14 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
 import {
   Canvas,
+  createPicture,
   PaintStyle,
   Picture,
   Skia,
-  createPicture,
 } from '@shopify/react-native-skia';
 import type { SkPicture } from '@shopify/react-native-skia';
-import { MODE_FRAMES, resolvePreset, type OrbState, type OrbSize } from './engine';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
+
+import { useAppActive } from '@/experiments/shared/hooks/use-app-active';
+
+import {
+  MODE_FRAMES,
+  resolvePreset,
+  type OrbSize,
+  type OrbState,
+} from '../lib/engine';
 
 /**
  * Renders Jakub Antalik's thinking-orb engine with Skia.
@@ -17,17 +25,9 @@ import { MODE_FRAMES, resolvePreset, type OrbState, type OrbSize } from './engin
  * to the UI thread where Skia rasterises them — the same threading model as the
  * upstream React Native port.
  *
- * One difference from upstream, and the reason it exists: upstream assumes ONE
- * orb on screen and gives it its own requestAnimationFrame loop. This app shows
- * a dozen at once (a 9-cell grid plus the toast stack), and a dozen independent
- * rAF loops each doing a setState per frame starve each other — every orb ends
- * up animating at a fraction of the frame rate, which reads as "the animation
- * is gone". So all orbs share ONE clock and one subscriber list.
+ * All orbs share one clock. Independent rAF loops starve each other when a
+ * dozen orbs (grid + toast stack) are on screen at once.
  */
-
-// ---------------------------------------------------------------------------
-// Shared clock: a single rAF loop that ticks every mounted orb.
-// ---------------------------------------------------------------------------
 
 type Tick = (t: number) => void;
 
@@ -37,8 +37,9 @@ let startedAt = 0;
 
 function pump() {
   const t = (Date.now() - startedAt) / 1000;
-  // copy: a subscriber may unmount mid-iteration
-  for (const fn of Array.from(subscribers)) fn(t);
+  for (const fn of Array.from(subscribers)) {
+    fn(t);
+  }
   rafId = requestAnimationFrame(pump);
 }
 
@@ -81,10 +82,10 @@ export function ParticleOrb({
   paused = false,
   style,
 }: ParticleOrbProps) {
+  const appActive = useAppActive();
+  const isPaused = paused || !appActive;
   const [picture, setPicture] = useState<SkPicture | null>(null);
 
-  // One paint per pass, mutated in place: a fresh SkPaint per dot would
-  // allocate hundreds of native objects a frame.
   const paints = useMemo(
     () => ({ fill: Skia.Paint(), stroke: Skia.Paint() }),
     [],
@@ -92,10 +93,11 @@ export function ParticleOrb({
   const rgba = useRef(new Float32Array(4)).current;
 
   const preset = nearestPreset(size);
-  const { mode, speed: baseSpeed, opts } = useMemo(
-    () => resolvePreset(state, preset),
-    [state, preset],
-  );
+  const {
+    mode,
+    speed: baseSpeed,
+    opts,
+  } = useMemo(() => resolvePreset(state, preset), [state, preset]);
 
   const effSpeed = baseSpeed * speed;
   const speedRef = useRef(effSpeed);
@@ -109,9 +111,6 @@ export function ParticleOrb({
 
     const build = MODE_FRAMES[mode];
 
-    // Ink value (0 = darkest ink on paper). On a dark substrate it's mirrored
-    // so near dots read bright — quantised to 8-bit exactly like the canvas
-    // painter, so both platforms land on identical greys.
     const setInk = (paint: typeof fill, white: number, alpha: number) => {
       const w = Math.min(1, Math.max(0, white));
       const g = Math.round((dark ? 1 - w : w) * 255) / 255;
@@ -125,14 +124,12 @@ export function ParticleOrb({
     const record = (t: number) => {
       const frame = build(size, t, opts);
       const pic = createPicture(
-        (canvas) => {
-          // lines first, so nodes sit on top of their edges
+        canvas => {
           for (const l of frame.lines) {
             setInk(stroke, l.white, l.a ?? 1);
             stroke.setStrokeWidth(l.w);
             canvas.drawLine(l.x1, l.y1, l.x2, l.y2, stroke);
           }
-          // dots are already z-sorted into draw order by the engine
           for (const d of frame.dots) {
             setInk(fill, d.white, d.a ?? 1);
             canvas.drawCircle(d.x, d.y, d.r, fill);
@@ -143,12 +140,13 @@ export function ParticleOrb({
       setPicture(pic);
     };
 
-    // draw once even when paused, so the orb is never blank
     record(0);
-    if (paused) return;
+    if (isPaused) {
+      return;
+    }
 
-    return subscribe((t) => record(t * speedRef.current));
-  }, [mode, opts, size, dark, paused, paints, rgba]);
+    return subscribe(t => record(t * speedRef.current));
+  }, [mode, opts, size, dark, isPaused, paints, rgba]);
 
   return (
     <View style={[{ width: size, height: size }, style]}>

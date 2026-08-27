@@ -1,7 +1,3 @@
-// Labels + ordering for the nine orb states. State semantics and the
-// particle geometry now live in the vendored engine (./engine); this file
-// is just the presentation layer (display strings, sheet body copy, order).
-
 import type { OrbState } from './engine';
 
 export type { OrbState } from './engine';
@@ -13,8 +9,8 @@ export type OrbMeta = {
   hint: string;
 };
 
-// Labels mirror the upstream component (LABELS map in the RN port), with the
-// two "Agent …" phrasings shown in Jakub's demo video preserved.
+export type OrbToast = { id: string; state: OrbState };
+
 export const ORB_META: Record<OrbState, OrbMeta> = {
   working: { label: 'Working…', hint: 'orbits' },
   searching: { label: 'Searching…', hint: 'globe scan' },
@@ -27,8 +23,9 @@ export const ORB_META: Record<OrbState, OrbMeta> = {
   shaping: { label: 'Agent shaping…', hint: 'morph' },
 };
 
-/** Body copy shown in the expanded bottom sheet (from the demo video). */
-export const SHEET_BODY = 'Agent is processing your request. Please wait, it might take a few seconds.';
+/** Body copy shown in the expanded bottom sheet. */
+export const SHEET_BODY =
+  'Agent is processing your request. Please wait, it might take a few seconds.';
 
 export const ORB_ORDER: OrbState[] = [
   'working',
@@ -41,3 +38,8 @@ export const ORB_ORDER: OrbState[] = [
   'breathing',
   'shaping',
 ];
+
+/** Compact grid label: drop the ellipsis and a leading "Agent ". */
+export function orbCellLabel(state: OrbState): string {
+  return ORB_META[state].label.replace('…', '').replace('Agent ', '');
+}

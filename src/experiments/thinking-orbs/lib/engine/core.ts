@@ -37,7 +37,11 @@ export interface OrbFrame {
   lines: Line[];
 }
 
-export type Projector = (x: number, y: number, z: number) => [number, number, number];
+export type Projector = (
+  x: number,
+  y: number,
+  z: number,
+) => [number, number, number];
 
 export function lerp(a: number, b: number, f: number): number {
   return a + (b - a) * f;
@@ -83,7 +87,13 @@ export function angleDelta(a: number, b: number): number {
 }
 
 /** Shared spin + tilt + orthographic projection. */
-export function makeProj(yaw: number, tilt: number, cx: number, cy: number, scale: number): Projector {
+export function makeProj(
+  yaw: number,
+  tilt: number,
+  cx: number,
+  cy: number,
+  scale: number,
+): Projector {
   const st = Math.sin(tilt);
   const ct = Math.cos(tilt);
   const sy = Math.sin(yaw);
@@ -112,7 +122,11 @@ export function makeProj(yaw: number, tilt: number, cx: number, cy: number, scal
  * output verbatim — a port draws the list, it never re-derives anything —
  * and what lets the golden-vector tests compare numbers instead of pixels.
  */
-export function finalizeFrame(dots: Dot[], lines: Line[], rMin = 0.3): OrbFrame {
+export function finalizeFrame(
+  dots: Dot[],
+  lines: Line[],
+  rMin = 0.3,
+): OrbFrame {
   const visible: Dot[] = [];
   for (const d of dots) {
     if ((d.a ?? 1) < 0.02) continue;
@@ -120,7 +134,7 @@ export function finalizeFrame(dots: Dot[], lines: Line[], rMin = 0.3): OrbFrame 
     visible.push(d);
   }
   visible.sort((a, b) => a.z - b.z);
-  return { dots: visible, lines: lines.filter((l) => (l.a ?? 1) >= 0.02) };
+  return { dots: visible, lines: lines.filter(l => (l.a ?? 1) >= 0.02) };
 }
 
 /**
