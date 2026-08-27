@@ -1,1 +1,7 @@
-{ "recommendations": ["expo.vscode-expo-tools"] }
+{
+  "recommendations": [
+    "bradlc.vscode-tailwindcss",
+    "expo.vscode-expo-tools",
+    "oxc.oxc-vscode"
+  ]
+}
